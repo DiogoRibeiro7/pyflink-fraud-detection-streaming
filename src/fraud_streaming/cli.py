@@ -20,6 +20,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show low-risk transactions as well as elevated alerts.",
     )
+    parser.add_argument(
+        "--dead-letter-output",
+        type=Path,
+        help="Optional JSONL path for malformed events that should not stop the run.",
+    )
     return parser
 
 
@@ -34,9 +39,27 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not input_path.is_file():
         parser.error(f"input path is not a file: {input_path}")
 
+    dead_letter_output: Path | None = args.dead_letter_output
+    if (
+        dead_letter_output is not None
+        and dead_letter_output.exists()
+        and dead_letter_output.is_dir()
+    ):
+        parser.error(f"dead-letter output path is a directory: {dead_letter_output}")
+
     with input_path.open("r", encoding="utf-8") as handle:
-        for alert in process_json_lines(handle, emit_low_risk=args.show_all):
-            print(alert_to_json(alert))
+        if dead_letter_output is None:
+            for alert in process_json_lines(handle, emit_low_risk=args.show_all):
+                print(alert_to_json(alert))
+        else:
+            dead_letter_output.parent.mkdir(parents=True, exist_ok=True)
+            with dead_letter_output.open("w", encoding="utf-8") as dead_letter_handle:
+                for alert in process_json_lines(
+                    handle,
+                    emit_low_risk=args.show_all,
+                    dead_letter_handle=dead_letter_handle,
+                ):
+                    print(alert_to_json(alert))
 
     return 0
 

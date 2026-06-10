@@ -268,6 +268,25 @@ Validation status:
 }
 ```
 
+## Dead-letter handling for malformed events
+
+The local runner can keep processing valid events while writing malformed rows to a dead-letter JSONL file:
+
+```bash
+poetry run fraud-local data/sample_transactions.jsonl \
+  --show-all \
+  --dead-letter-output data/dead_letter.jsonl
+```
+
+Dead-letter records preserve:
+
+- the raw event payload
+- the parse error, if JSON decoding failed
+- structured quality check failures
+- the ingestion timestamp
+
+Current quality checks cover missing required fields, invalid amounts, invalid timestamps, unsupported currencies, empty user/card identifiers, future event timestamps beyond tolerance, and duplicate transaction IDs within a local batch.
+
 ## Core features
 
 For each user/card stream, the project computes:
