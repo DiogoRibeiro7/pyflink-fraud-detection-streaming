@@ -408,6 +408,43 @@ The parity report checks:
 
 The command exits with a non-zero status when parity fails and always saves a JSON report.
 
+## Replay historical streams
+
+Replay historical JSONL transactions to stdout:
+
+```bash
+poetry run fraud-replay data/sample_transactions.jsonl --as-fast-as-possible
+```
+
+Preserve event-time spacing:
+
+```bash
+poetry run fraud-replay data/sample_transactions.jsonl --preserve-timing
+```
+
+Replay faster than wall-clock event spacing and filter the slice:
+
+```bash
+poetry run fraud-replay data/sample_transactions.jsonl \
+  --speed-multiplier 10 \
+  --start-time 2026-06-10T12:00:00Z \
+  --end-time 2026-06-10T13:00:00Z \
+  --user-id user-001
+```
+
+Dry-run the replay plan without emitting:
+
+```bash
+poetry run fraud-replay data/sample_transactions.jsonl --dry-run --speed-multiplier 20
+```
+
+You can also replay to a file or Kafka:
+
+```bash
+poetry run fraud-replay data/sample_transactions.jsonl --output-mode file --output-path data/replayed.jsonl
+poetry run fraud-replay data/sample_transactions.jsonl --output-mode kafka --bootstrap-servers localhost:9092 --topic replay-transactions
+```
+
 ## Core features
 
 For each user/card stream, the project computes:
