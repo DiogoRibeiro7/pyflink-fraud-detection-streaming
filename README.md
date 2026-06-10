@@ -385,6 +385,29 @@ poetry run fraud-local data/sample_transactions.jsonl \
 
 Model artifacts fail fast if the stored raw feature schema does not match the canonical inference feature schema.
 
+## Feature parity checks
+
+To check offline-versus-inference feature parity on deterministic JSONL inputs:
+
+```bash
+poetry run fraud-check-feature-parity \
+  --reference data/sample_transactions.jsonl \
+  --current data/sample_transactions.jsonl \
+  --output artifacts/feature_parity_report.json \
+  --deterministic
+```
+
+The parity report checks:
+
+- feature column presence
+- feature column order against the canonical schema
+- coarse dtype compatibility
+- null-rate differences
+- row-count agreement
+- deterministic value differences when `--deterministic` is set
+
+The command exits with a non-zero status when parity fails and always saves a JSON report.
+
 ## Core features
 
 For each user/card stream, the project computes:

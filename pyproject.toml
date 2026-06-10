@@ -40,6 +40,7 @@ pyflink-fraud-job = "fraud_streaming.flink_job:main"
 fraud-produce-transactions = "fraud_streaming.kafka.producer:main"
 fraud-consume-alerts = "fraud_streaming.kafka.consumer:main"
 fraud-train-model = "fraud_streaming.ml.training:main"
+fraud-check-feature-parity = "fraud_streaming.ml.feature_parity:main"
 
 [build-system]
 requires = ["poetry-core>=1.8.0"]

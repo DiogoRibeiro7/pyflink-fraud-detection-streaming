@@ -69,6 +69,7 @@ class TrainingExample:
     """One offline training row before vectorization."""
 
     transaction_id: str
+    event_time: str
     feature_values: dict[str, float | str]
     label: int
     label_source: str
@@ -257,6 +258,7 @@ def build_training_dataset(
         examples.append(
             TrainingExample(
                 transaction_id=transaction.transaction_id,
+                event_time=transaction.event_time.isoformat(),
                 feature_values=build_feature_dict(features, transaction),
                 label=label,
                 label_source=label_source,
