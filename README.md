@@ -88,6 +88,7 @@ make local-demo
 ```
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the local development workflow and optional extras.
+See [`docs/iceberg-sink.md`](docs/iceberg-sink.md) for the local sink abstraction and Iceberg design notes.
 
 ## Generate synthetic transactions
 
@@ -317,6 +318,31 @@ fraud_transactions_processed_total 8
 fraud_average_risk_score 18.125
 ```
 
+## Local file sinks and Iceberg-ready extension points
+
+The local CLI still defaults to stdout alerts, but it can now also write validated transactions and emitted alerts to file sinks:
+
+```bash
+poetry run fraud-local data/sample_transactions.jsonl \
+  --show-all \
+  --alert-sink jsonl \
+  --alert-output artifacts/alerts.jsonl \
+  --transaction-sink jsonl \
+  --transaction-output artifacts/transactions.jsonl
+```
+
+Optional Parquet output requires `pyarrow`:
+
+```bash
+pip install pyarrow
+poetry run fraud-local data/sample_transactions.jsonl \
+  --show-all \
+  --alert-sink parquet \
+  --alert-output artifacts/alerts.parquet
+```
+
+The repository also includes an explicit Iceberg sink extension point with honest limitations documented in [`docs/iceberg-sink.md`](docs/iceberg-sink.md). The local fallback for runnable demos remains JSONL or Parquet.
+
 ## Offline ML training baseline
 
 The repository now includes an optional offline training pipeline that reuses the same streaming-style feature logic used during local processing.
@@ -527,4 +553,4 @@ The default scoring is rule-based for transparency. This is intentional for a po
 
 ## Production extensions
 
-See [`ROADMAP.md`](ROADMAP.md) for the next stages: model scoring, feature store integration, Iceberg/S3 sink, drift monitoring, and CI/CD.
+See [`ROADMAP.md`](ROADMAP.md) for the next stages: feature store integration, fuller Iceberg/S3 writes, drift monitoring, and CI/CD.

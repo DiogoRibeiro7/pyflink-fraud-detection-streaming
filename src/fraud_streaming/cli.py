@@ -10,7 +10,20 @@ from pathlib import Path
 from fraud_streaming.local_runner import load_model_scorer, process_json_lines
 from fraud_streaming.ml.scoring import ScoringConfig
 from fraud_streaming.observability.metrics import LocalMetricsRegistry
-from fraud_streaming.serialization import alert_to_json
+from fraud_streaming.sinks import (
+    AlertSink,
+    IcebergAlertSink,
+    IcebergSinkConfig,
+    IcebergTransactionSink,
+    JsonlAlertSink,
+    JsonlTransactionSink,
+    NullTransactionSink,
+    ParquetAlertSink,
+    ParquetTransactionSink,
+    StdoutAlertSink,
+    TransactionSink,
+    validate_local_sink_args,
+)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -31,6 +44,44 @@ def build_parser() -> argparse.ArgumentParser:
         "--metrics-output",
         type=Path,
         help="Optional output path for Prometheus text metrics.",
+    )
+    parser.add_argument(
+        "--alert-sink",
+        choices=["stdout", "jsonl", "parquet", "iceberg"],
+        default="stdout",
+        help="Where to write emitted alerts.",
+    )
+    parser.add_argument(
+        "--alert-output",
+        type=Path,
+        help="Output path when --alert-sink is jsonl or parquet.",
+    )
+    parser.add_argument(
+        "--transaction-sink",
+        choices=["none", "jsonl", "parquet", "iceberg"],
+        default="none",
+        help="Optional sink for validated transactions.",
+    )
+    parser.add_argument(
+        "--transaction-output",
+        type=Path,
+        help="Output path when --transaction-sink is jsonl or parquet.",
+    )
+    parser.add_argument(
+        "--iceberg-catalog-uri",
+        help="Catalog URI when using iceberg sinks.",
+    )
+    parser.add_argument(
+        "--iceberg-warehouse",
+        help="Warehouse path or URI when using iceberg sinks.",
+    )
+    parser.add_argument(
+        "--iceberg-alert-table",
+        help="Target Iceberg table name when --alert-sink=iceberg.",
+    )
+    parser.add_argument(
+        "--iceberg-transaction-table",
+        help="Target Iceberg table name when --transaction-sink=iceberg.",
     )
     parser.add_argument(
         "--scoring-strategy",
@@ -82,6 +133,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     metrics = LocalMetricsRegistry() if metrics_output is not None else None
     try:
+        sink_config = validate_local_sink_args(args)
         scoring_config = ScoringConfig(
             strategy=args.scoring_strategy,
             model_artifact_path=args.model_artifact,
@@ -92,28 +144,83 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ValueError as exc:
         parser.error(str(exc))
 
-    with input_path.open("r", encoding="utf-8") as handle:
-        if dead_letter_output is None:
-            for alert in process_json_lines(
-                handle,
-                emit_low_risk=args.show_all,
-                metrics=metrics,
-                scoring_config=scoring_config,
-                model_scorer=model_scorer,
-            ):
-                print(alert_to_json(alert))
+    def _iceberg_config(table_name: str | None) -> IcebergSinkConfig:
+        if sink_config.iceberg_catalog_uri is None or sink_config.iceberg_warehouse is None:
+            raise ValueError("iceberg sink configuration is incomplete")
+        if table_name is None:
+            raise ValueError("iceberg sink table name is required")
+        return IcebergSinkConfig(
+            catalog_uri=sink_config.iceberg_catalog_uri,
+            warehouse=sink_config.iceberg_warehouse,
+            table_name=table_name,
+        )
+
+    alert_sink: AlertSink
+    try:
+        if sink_config.alert_sink == "stdout":
+            alert_sink = StdoutAlertSink()
+        elif sink_config.alert_sink == "jsonl":
+            if sink_config.alert_output is None:
+                parser.error("--alert-output is required when --alert-sink=jsonl")
+            alert_sink = JsonlAlertSink(sink_config.alert_output)
+        elif sink_config.alert_sink == "parquet":
+            if sink_config.alert_output is None:
+                parser.error("--alert-output is required when --alert-sink=parquet")
+            alert_sink = ParquetAlertSink(sink_config.alert_output)
         else:
-            dead_letter_output.parent.mkdir(parents=True, exist_ok=True)
-            with dead_letter_output.open("w", encoding="utf-8") as dead_letter_handle:
-                for alert in process_json_lines(
+            alert_sink = IcebergAlertSink(_iceberg_config(sink_config.iceberg_alert_table))
+    except RuntimeError as exc:
+        parser.error(str(exc))
+
+    transaction_sink: TransactionSink
+    try:
+        if sink_config.transaction_sink == "none":
+            transaction_sink = NullTransactionSink()
+        elif sink_config.transaction_sink == "jsonl":
+            if sink_config.transaction_output is None:
+                parser.error("--transaction-output is required when --transaction-sink=jsonl")
+            transaction_sink = JsonlTransactionSink(sink_config.transaction_output)
+        elif sink_config.transaction_sink == "parquet":
+            if sink_config.transaction_output is None:
+                parser.error("--transaction-output is required when --transaction-sink=parquet")
+            transaction_sink = ParquetTransactionSink(sink_config.transaction_output)
+        else:
+            transaction_sink = IcebergTransactionSink(
+                _iceberg_config(sink_config.iceberg_transaction_table)
+            )
+    except RuntimeError as exc:
+        parser.error(str(exc))
+
+    try:
+        with input_path.open("r", encoding="utf-8") as handle:
+            if dead_letter_output is None:
+                for _alert in process_json_lines(
                     handle,
                     emit_low_risk=args.show_all,
-                    dead_letter_handle=dead_letter_handle,
                     metrics=metrics,
                     scoring_config=scoring_config,
                     model_scorer=model_scorer,
+                    transaction_sink=transaction_sink,
+                    alert_sink=alert_sink,
                 ):
-                    print(alert_to_json(alert))
+                    pass
+            else:
+                dead_letter_output.parent.mkdir(parents=True, exist_ok=True)
+                with dead_letter_output.open("w", encoding="utf-8") as dead_letter_handle:
+                    for _alert in process_json_lines(
+                        handle,
+                        emit_low_risk=args.show_all,
+                        dead_letter_handle=dead_letter_handle,
+                        metrics=metrics,
+                        scoring_config=scoring_config,
+                        model_scorer=model_scorer,
+                        transaction_sink=transaction_sink,
+                        alert_sink=alert_sink,
+                    ):
+                        pass
+    finally:
+        alert_sink.close()
+        transaction_sink.close()
 
     if metrics_output is not None and metrics is not None:
         metrics_output.parent.mkdir(parents=True, exist_ok=True)

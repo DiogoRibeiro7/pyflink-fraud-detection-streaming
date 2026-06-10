@@ -23,6 +23,7 @@ from fraud_streaming.quality import (
 )
 from fraud_streaming.rules import build_alert, score_features
 from fraud_streaming.schemas import Alert, Transaction, UserProfileState
+from fraud_streaming.sinks import AlertSink, TransactionSink
 
 DEFAULT_SCORING_CONFIG = ScoringConfig()
 
@@ -79,6 +80,8 @@ def process_json_lines(
     metrics: LocalMetricsRegistry | None = None,
     scoring_config: ScoringConfig = DEFAULT_SCORING_CONFIG,
     model_scorer: ModelScorer | None = None,
+    transaction_sink: TransactionSink | None = None,
+    alert_sink: AlertSink | None = None,
 ) -> Iterator[Alert]:
     """Process JSON lines and yield alerts.
 
@@ -122,6 +125,8 @@ def process_json_lines(
         if validated.transaction is None:
             raise ValueError("validated transaction result cannot be empty")
         transaction = validated.transaction
+        if transaction_sink is not None:
+            transaction_sink.write(transaction)
         alert = process_transaction(
             transaction,
             states,
@@ -134,6 +139,8 @@ def process_json_lines(
         if emit_low_risk or alert.risk_level != "low":
             if metrics is not None:
                 metrics.record_emitted_alert(alert)
+            if alert_sink is not None:
+                alert_sink.write(alert)
             yield alert
 
 
