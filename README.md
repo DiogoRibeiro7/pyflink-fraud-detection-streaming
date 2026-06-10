@@ -317,6 +317,46 @@ fraud_transactions_processed_total 8
 fraud_average_risk_score 18.125
 ```
 
+## Offline ML training baseline
+
+The repository now includes an optional offline training pipeline that reuses the same streaming-style feature logic used during local processing.
+
+Install the ML extra:
+
+```bash
+poetry install --with dev -E ml
+```
+
+Train on sample or synthetic data:
+
+```bash
+poetry run fraud-train-model --input data/sample_transactions.jsonl
+```
+
+Or generate a larger synthetic training set on the fly:
+
+```bash
+poetry run fraud-train-model \
+  --users 50 \
+  --transactions 2000 \
+  --seed 7 \
+  --output-dir artifacts
+```
+
+Each run writes a versioned artifact directory containing:
+
+- `model.pkl`
+- `feature_schema.json`
+- `metrics.json`
+
+The saved metrics include precision, recall, F1, ROC-AUC when the evaluation split contains both classes, and a threshold analysis table.
+
+Important label note:
+
+- If the input data includes a `label` field, it must be binary `0/1` or boolean.
+- If no label is present, the pipeline creates synthetic demo labels from transparent heuristics so the ML workflow can be demonstrated.
+- Those synthetic labels are not real fraud ground truth and should not be presented as such.
+
 ## Core features
 
 For each user/card stream, the project computes:
