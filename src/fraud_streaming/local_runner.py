@@ -8,6 +8,7 @@ from typing import TextIO
 
 from fraud_streaming.config import DEFAULT_CONFIG, FraudConfig
 from fraud_streaming.features import compute_features, update_state
+from fraud_streaming.observability.metrics import LocalMetricsRegistry
 from fraud_streaming.quality import (
     DEFAULT_FUTURE_EVENT_TOLERANCE,
     dead_letter_to_json,
@@ -52,6 +53,7 @@ def process_json_lines(
     emit_low_risk: bool = False,
     dead_letter_handle: TextIO | None = None,
     future_tolerance: timedelta = DEFAULT_FUTURE_EVENT_TOLERANCE,
+    metrics: LocalMetricsRegistry | None = None,
 ) -> Iterator[Alert]:
     """Process JSON lines and yield alerts.
 
@@ -63,6 +65,7 @@ def process_json_lines(
         dead_letter_handle: Optional writable handle that receives malformed
             events as JSONL dead-letter records.
         future_tolerance: Allowed future skew for event timestamps.
+        metrics: Optional local metrics registry for demo observability.
 
     Yields:
         Alert objects.
@@ -79,6 +82,8 @@ def process_json_lines(
             future_tolerance=future_tolerance,
         )
         if validated.dead_letter is not None:
+            if metrics is not None:
+                metrics.record_malformed_event()
             if dead_letter_handle is not None:
                 dead_letter_handle.write(dead_letter_to_json(validated.dead_letter) + "\n")
             else:
@@ -91,5 +96,9 @@ def process_json_lines(
             raise ValueError("validated transaction result cannot be empty")
         transaction = validated.transaction
         alert = process_transaction(transaction, states, config)
+        if metrics is not None:
+            metrics.record_processed_transaction(transaction, alert)
         if emit_low_risk or alert.risk_level != "low":
+            if metrics is not None:
+                metrics.record_emitted_alert(alert)
             yield alert

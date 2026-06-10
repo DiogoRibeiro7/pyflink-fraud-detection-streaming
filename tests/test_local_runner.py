@@ -6,6 +6,7 @@ import json
 import pytest
 
 from fraud_streaming.local_runner import process_json_lines
+from fraud_streaming.observability.metrics import LocalMetricsRegistry
 
 
 def test_process_json_lines_writes_dead_letters_and_continues() -> None:
@@ -56,3 +57,30 @@ def test_process_json_lines_writes_dead_letters_and_continues() -> None:
 def test_process_json_lines_raises_without_dead_letter_handle() -> None:
     with pytest.raises(ValueError):
         list(process_json_lines(["{bad json"], emit_low_risk=True))
+
+
+def test_process_json_lines_records_metrics_when_registry_is_present() -> None:
+    lines = [
+        json.dumps(
+            {
+                "transaction_id": "tx-1",
+                "user_id": "user-1",
+                "card_id": "card-1",
+                "merchant_id": "merchant-1",
+                "amount": 42.0,
+                "currency": "EUR",
+                "country": "PT",
+                "device_id": "device-1",
+                "merchant_category": "grocery",
+                "event_time": "2026-06-10T12:00:00Z",
+                "channel": "pos",
+                "is_card_present": True,
+            }
+        )
+    ]
+    registry = LocalMetricsRegistry()
+
+    alerts = list(process_json_lines(lines, emit_low_risk=True, metrics=registry))
+
+    assert len(alerts) == 1
+    assert "fraud_transactions_processed_total 1" in registry.to_prometheus_text()

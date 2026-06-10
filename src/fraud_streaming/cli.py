@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from fraud_streaming.local_runner import process_json_lines
+from fraud_streaming.observability.metrics import LocalMetricsRegistry
 from fraud_streaming.serialization import alert_to_json
 
 
@@ -25,6 +26,11 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         help="Optional JSONL path for malformed events that should not stop the run.",
     )
+    parser.add_argument(
+        "--metrics-output",
+        type=Path,
+        help="Optional output path for Prometheus text metrics.",
+    )
     return parser
 
 
@@ -40,16 +46,21 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(f"input path is not a file: {input_path}")
 
     dead_letter_output: Path | None = args.dead_letter_output
+    metrics_output: Path | None = args.metrics_output
     if (
         dead_letter_output is not None
         and dead_letter_output.exists()
         and dead_letter_output.is_dir()
     ):
         parser.error(f"dead-letter output path is a directory: {dead_letter_output}")
+    if metrics_output is not None and metrics_output.exists() and metrics_output.is_dir():
+        parser.error(f"metrics output path is a directory: {metrics_output}")
+
+    metrics = LocalMetricsRegistry() if metrics_output is not None else None
 
     with input_path.open("r", encoding="utf-8") as handle:
         if dead_letter_output is None:
-            for alert in process_json_lines(handle, emit_low_risk=args.show_all):
+            for alert in process_json_lines(handle, emit_low_risk=args.show_all, metrics=metrics):
                 print(alert_to_json(alert))
         else:
             dead_letter_output.parent.mkdir(parents=True, exist_ok=True)
@@ -58,8 +69,13 @@ def main(argv: Sequence[str] | None = None) -> int:
                     handle,
                     emit_low_risk=args.show_all,
                     dead_letter_handle=dead_letter_handle,
+                    metrics=metrics,
                 ):
                     print(alert_to_json(alert))
+
+    if metrics_output is not None and metrics is not None:
+        metrics_output.parent.mkdir(parents=True, exist_ok=True)
+        metrics_output.write_text(metrics.to_prometheus_text(), encoding="utf-8")
 
     return 0
 

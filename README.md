@@ -287,6 +287,36 @@ Dead-letter records preserve:
 
 Current quality checks cover missing required fields, invalid amounts, invalid timestamps, unsupported currencies, empty user/card identifiers, future event timestamps beyond tolerance, and duplicate transaction IDs within a local batch.
 
+## Local metrics export
+
+The local runner can also write Prometheus text format metrics:
+
+```bash
+poetry run fraud-local data/sample_transactions.jsonl \
+  --show-all \
+  --metrics-output data/fraud_metrics.prom
+```
+
+The exported metrics include:
+
+- processed transactions
+- emitted alerts
+- high-risk alerts
+- malformed events
+- average risk score
+- event counts by country, channel, and risk level
+
+Example output:
+
+```text
+# HELP fraud_transactions_processed_total Total number of successfully processed transactions.
+# TYPE fraud_transactions_processed_total counter
+fraud_transactions_processed_total 8
+# HELP fraud_average_risk_score Average risk score of successfully processed transactions.
+# TYPE fraud_average_risk_score gauge
+fraud_average_risk_score 18.125
+```
+
 ## Core features
 
 For each user/card stream, the project computes:
