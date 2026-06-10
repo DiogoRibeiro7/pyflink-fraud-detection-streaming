@@ -5,12 +5,27 @@ from __future__ import annotations
 import argparse
 import sys
 from collections.abc import Sequence
+from dataclasses import dataclass
 from typing import Any
 
 from fraud_streaming.features import compute_features, update_state
 from fraud_streaming.rules import build_alert, score_features
 from fraud_streaming.schemas import UserProfileState
 from fraud_streaming.serialization import alert_to_json, transaction_from_json
+
+
+@dataclass(frozen=True, slots=True)
+class FlinkJobConfig:
+    """Validated runtime configuration for the PyFlink job wrapper."""
+
+    source: str
+    sink: str
+    input_path: str | None
+    bootstrap_servers: str
+    input_topic: str
+    output_topic: str
+    group_id: str
+    parallelism: int
 
 
 def _require_pyflink() -> None:
@@ -73,6 +88,52 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def validate_runtime_args(args: argparse.Namespace) -> FlinkJobConfig:
+    """Validate source and sink configuration before importing PyFlink."""
+    bootstrap_servers = args.bootstrap_servers.strip()
+    input_topic = args.input_topic.strip()
+    output_topic = args.output_topic.strip()
+    group_id = args.group_id.strip()
+    input_path = args.input.strip() if isinstance(args.input, str) else args.input
+
+    if args.parallelism <= 0:
+        raise ValueError("--parallelism must be positive")
+
+    if args.source == "file":
+        if not input_path:
+            raise ValueError("--input is required when --source=file")
+    elif args.source == "kafka":
+        if input_path:
+            raise ValueError("--input is only supported when --source=file")
+        if not bootstrap_servers:
+            raise ValueError("--bootstrap-servers is required when --source=kafka")
+        if not input_topic:
+            raise ValueError("--input-topic is required when --source=kafka")
+        if not group_id:
+            raise ValueError("--group-id is required when --source=kafka")
+    else:
+        raise ValueError(f"unsupported source: {args.source}")
+
+    if args.sink == "kafka":
+        if not bootstrap_servers:
+            raise ValueError("--bootstrap-servers is required when --sink=kafka")
+        if not output_topic:
+            raise ValueError("--output-topic is required when --sink=kafka")
+    elif args.sink != "stdout":
+        raise ValueError(f"unsupported sink: {args.sink}")
+
+    return FlinkJobConfig(
+        source=args.source,
+        sink=args.sink,
+        input_path=input_path,
+        bootstrap_servers=bootstrap_servers,
+        input_topic=input_topic,
+        output_topic=output_topic,
+        group_id=group_id,
+        parallelism=args.parallelism,
+    )
+
+
 def _build_file_source(env: Any, input_path: str) -> Any:
     """Build a DataStream source from a local text file."""
     return env.read_text_file(input_path)
@@ -122,26 +183,27 @@ def _write_kafka(alert_stream: Any, args: argparse.Namespace) -> None:
 
 def run_job(args: argparse.Namespace) -> None:  # pragma: no cover - requires PyFlink runtime
     """Run the configured PyFlink fraud detection job."""
+    config = validate_runtime_args(args)
     _require_pyflink()
 
     from pyflink.common.typeinfo import Types
     from pyflink.datastream import StreamExecutionEnvironment
 
     env = StreamExecutionEnvironment.get_execution_environment()
-    env.set_parallelism(args.parallelism)
+    env.set_parallelism(config.parallelism)
     env.enable_checkpointing(30_000)
 
-    if args.source == "file":
-        if not args.input:
+    if config.source == "file":
+        if config.input_path is None:
             raise ValueError("--input is required when --source=file")
-        source_stream = _build_file_source(env, args.input)
+        source_stream = _build_file_source(env, config.input_path)
     else:
         source_stream = _build_kafka_source(env, args)
 
     keyed = source_stream.key_by(lambda raw: transaction_from_json(raw).key)
     alert_stream = keyed.process(FraudProcessFunction.build(), output_type=Types.STRING())
 
-    if args.sink == "kafka":
+    if config.sink == "kafka":
         _write_kafka(alert_stream, args)
     else:
         _write_stdout(alert_stream)

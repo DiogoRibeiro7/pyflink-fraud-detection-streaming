@@ -181,6 +181,8 @@ poetry run pyflink-fraud-job \
 
 The Kafka path assumes the required Flink Kafka connector is available to the Flink runtime. In managed Flink environments this is normally configured at the cluster/job level.
 
+Connector setup notes and troubleshooting live in [`docs/flink-kafka-connectors.md`](docs/flink-kafka-connectors.md).
+
 ## Example input event
 
 ```json
