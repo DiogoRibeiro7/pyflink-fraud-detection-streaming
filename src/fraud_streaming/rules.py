@@ -17,7 +17,7 @@ class RuleScore:
     reasons: list[str]
 
 
-def _risk_level(score: int) -> RiskLevel:
+def risk_level_from_score(score: int) -> RiskLevel:
     """Map a numeric score to a risk level."""
     if score >= 70:
         return "high"
@@ -81,7 +81,7 @@ def score_features(
     bounded_score = min(score, 100)
     return RuleScore(
         risk_score=bounded_score,
-        risk_level=_risk_level(bounded_score),
+        risk_level=risk_level_from_score(bounded_score),
         reasons=reasons,
     )
 

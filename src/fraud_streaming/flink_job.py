@@ -6,9 +6,16 @@ import argparse
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from fraud_streaming.features import compute_features, update_state
+from fraud_streaming.ml.scoring import (
+    ModelScorer,
+    ScoringConfig,
+    combine_scores,
+    compute_model_score,
+)
 from fraud_streaming.rules import build_alert, score_features
 from fraud_streaming.schemas import UserProfileState
 from fraud_streaming.serialization import alert_to_json, transaction_from_json
@@ -26,6 +33,10 @@ class FlinkJobConfig:
     output_topic: str
     group_id: str
     parallelism: int
+    scoring_strategy: str
+    model_artifact_path: Path | None
+    rule_weight: float
+    model_weight: float
 
 
 def _require_pyflink() -> None:
@@ -46,7 +57,7 @@ class FraudProcessFunction:  # pragma: no cover - exercised only with PyFlink ru
     """
 
     @staticmethod
-    def build() -> Any:
+    def build(scoring_config: ScoringConfig, model_scorer: ModelScorer | None) -> Any:
         """Build a KeyedProcessFunction subclass after PyFlink is available."""
         _require_pyflink()
 
@@ -63,8 +74,20 @@ class FraudProcessFunction:  # pragma: no cover - exercised only with PyFlink ru
                 transaction = transaction_from_json(value)
                 state = UserProfileState.from_json(self.profile_state.value())
                 features = compute_features(transaction, state)
-                score = score_features(features)
-                alert = build_alert(features, score)
+                rule_score = score_features(features)
+                model_score = None
+                if scoring_config.strategy in {"model", "blend"}:
+                    if model_scorer is None:
+                        raise ValueError("model_scorer is required for model or blend strategy")
+                    model_score = compute_model_score(model_scorer, features, transaction)
+                final_score = combine_scores(
+                    rule_score=rule_score,
+                    model_score=model_score,
+                    strategy=scoring_config.strategy,
+                    rule_weight=scoring_config.rule_weight,
+                    model_weight=scoring_config.model_weight,
+                )
+                alert = build_alert(features, final_score)
                 updated_state = update_state(transaction, state)
                 self.profile_state.update(updated_state.to_json())
 
@@ -85,6 +108,17 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--output-topic", default="fraud-alerts")
     parser.add_argument("--group-id", default="fraud-detector")
     parser.add_argument("--parallelism", type=int, default=1)
+    parser.add_argument(
+        "--scoring-strategy",
+        choices=["rules", "model", "blend"],
+        default="rules",
+    )
+    parser.add_argument(
+        "--model-artifact",
+        help="Optional model artifact path for model-aware scoring.",
+    )
+    parser.add_argument("--rule-weight", type=float, default=0.5)
+    parser.add_argument("--model-weight", type=float, default=0.5)
     return parser
 
 
@@ -122,6 +156,15 @@ def validate_runtime_args(args: argparse.Namespace) -> FlinkJobConfig:
     elif args.sink != "stdout":
         raise ValueError(f"unsupported sink: {args.sink}")
 
+    scoring_config = ScoringConfig(
+        strategy=args.scoring_strategy,
+        model_artifact_path=(
+            Path(args.model_artifact) if args.model_artifact is not None else None
+        ),
+        rule_weight=args.rule_weight,
+        model_weight=args.model_weight,
+    )
+
     return FlinkJobConfig(
         source=args.source,
         sink=args.sink,
@@ -131,6 +174,10 @@ def validate_runtime_args(args: argparse.Namespace) -> FlinkJobConfig:
         output_topic=output_topic,
         group_id=group_id,
         parallelism=args.parallelism,
+        scoring_strategy=scoring_config.strategy,
+        model_artifact_path=scoring_config.model_artifact_path,
+        rule_weight=scoring_config.rule_weight,
+        model_weight=scoring_config.model_weight,
     )
 
 
@@ -184,6 +231,19 @@ def _write_kafka(alert_stream: Any, args: argparse.Namespace) -> None:
 def run_job(args: argparse.Namespace) -> None:  # pragma: no cover - requires PyFlink runtime
     """Run the configured PyFlink fraud detection job."""
     config = validate_runtime_args(args)
+    scoring_config = ScoringConfig(
+        strategy=config.scoring_strategy,
+        model_artifact_path=config.model_artifact_path,
+        rule_weight=config.rule_weight,
+        model_weight=config.model_weight,
+    )
+    model_scorer = (
+        None
+        if scoring_config.strategy == "rules"
+        else ModelScorer.from_artifact(
+            config.model_artifact_path if config.model_artifact_path is not None else Path("")
+        )
+    )
     _require_pyflink()
 
     from pyflink.common.typeinfo import Types
@@ -201,7 +261,10 @@ def run_job(args: argparse.Namespace) -> None:  # pragma: no cover - requires Py
         source_stream = _build_kafka_source(env, args)
 
     keyed = source_stream.key_by(lambda raw: transaction_from_json(raw).key)
-    alert_stream = keyed.process(FraudProcessFunction.build(), output_type=Types.STRING())
+    alert_stream = keyed.process(
+        FraudProcessFunction.build(scoring_config, model_scorer),
+        output_type=Types.STRING(),
+    )
 
     if config.sink == "kafka":
         _write_kafka(alert_stream, args)

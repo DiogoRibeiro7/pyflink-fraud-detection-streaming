@@ -56,6 +56,7 @@ select = ["E", "F", "I", "B", "UP", "ANN", "SIM"]
 [tool.ruff.lint.per-file-ignores]
 "src/fraud_streaming/flink_job.py" = ["ANN401", "I001"]
 "src/fraud_streaming/ml/training.py" = ["ANN401"]
+"src/fraud_streaming/ml/scoring.py" = ["ANN401"]
 
 [tool.mypy]
 python_version = "3.10"

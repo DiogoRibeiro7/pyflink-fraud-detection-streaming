@@ -357,6 +357,34 @@ Important label note:
 - If no label is present, the pipeline creates synthetic demo labels from transparent heuristics so the ML workflow can be demonstrated.
 - Those synthetic labels are not real fraud ground truth and should not be presented as such.
 
+## Model scoring during inference
+
+Rule-only scoring remains the default. To enable model-aware scoring after training a model artifact:
+
+```bash
+poetry run fraud-local data/sample_transactions.jsonl \
+  --scoring-strategy blend \
+  --model-artifact artifacts/model-YYYYMMDDTHHMMSSZ/model.pkl
+```
+
+Available strategies:
+
+- `rules`: existing explainable rule score only
+- `model`: model probability scaled to `0-100`, while still attaching rule reasons
+- `blend`: weighted average of rule score and model score
+
+You can control the blend:
+
+```bash
+poetry run fraud-local data/sample_transactions.jsonl \
+  --scoring-strategy blend \
+  --model-artifact artifacts/model-YYYYMMDDTHHMMSSZ/model.pkl \
+  --rule-weight 0.7 \
+  --model-weight 0.3
+```
+
+Model artifacts fail fast if the stored raw feature schema does not match the canonical inference feature schema.
+
 ## Core features
 
 For each user/card stream, the project computes:

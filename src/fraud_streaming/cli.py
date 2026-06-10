@@ -7,7 +7,8 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from fraud_streaming.local_runner import process_json_lines
+from fraud_streaming.local_runner import load_model_scorer, process_json_lines
+from fraud_streaming.ml.scoring import ScoringConfig
 from fraud_streaming.observability.metrics import LocalMetricsRegistry
 from fraud_streaming.serialization import alert_to_json
 
@@ -30,6 +31,29 @@ def build_parser() -> argparse.ArgumentParser:
         "--metrics-output",
         type=Path,
         help="Optional output path for Prometheus text metrics.",
+    )
+    parser.add_argument(
+        "--scoring-strategy",
+        choices=["rules", "model", "blend"],
+        default="rules",
+        help="How to combine rule-based and model-based fraud scores.",
+    )
+    parser.add_argument(
+        "--model-artifact",
+        type=Path,
+        help="Optional model artifact path for model or blend scoring.",
+    )
+    parser.add_argument(
+        "--rule-weight",
+        type=float,
+        default=0.5,
+        help="Rule score weight for blended scoring.",
+    )
+    parser.add_argument(
+        "--model-weight",
+        type=float,
+        default=0.5,
+        help="Model score weight for blended scoring.",
     )
     return parser
 
@@ -57,10 +81,26 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(f"metrics output path is a directory: {metrics_output}")
 
     metrics = LocalMetricsRegistry() if metrics_output is not None else None
+    try:
+        scoring_config = ScoringConfig(
+            strategy=args.scoring_strategy,
+            model_artifact_path=args.model_artifact,
+            rule_weight=args.rule_weight,
+            model_weight=args.model_weight,
+        )
+        model_scorer = load_model_scorer(scoring_config)
+    except ValueError as exc:
+        parser.error(str(exc))
 
     with input_path.open("r", encoding="utf-8") as handle:
         if dead_letter_output is None:
-            for alert in process_json_lines(handle, emit_low_risk=args.show_all, metrics=metrics):
+            for alert in process_json_lines(
+                handle,
+                emit_low_risk=args.show_all,
+                metrics=metrics,
+                scoring_config=scoring_config,
+                model_scorer=model_scorer,
+            ):
                 print(alert_to_json(alert))
         else:
             dead_letter_output.parent.mkdir(parents=True, exist_ok=True)
@@ -70,6 +110,8 @@ def main(argv: Sequence[str] | None = None) -> int:
                     emit_low_risk=args.show_all,
                     dead_letter_handle=dead_letter_handle,
                     metrics=metrics,
+                    scoring_config=scoring_config,
+                    model_scorer=model_scorer,
                 ):
                     print(alert_to_json(alert))
 

@@ -17,6 +17,10 @@ def make_args(**overrides: object) -> argparse.Namespace:
         "output_topic": "fraud-alerts",
         "group_id": "fraud-detector",
         "parallelism": 1,
+        "scoring_strategy": "rules",
+        "model_artifact": None,
+        "rule_weight": 0.5,
+        "model_weight": 0.5,
     }
     payload.update(overrides)
     return argparse.Namespace(**payload)
@@ -58,3 +62,8 @@ def test_validate_runtime_args_requires_output_topic_for_kafka_sink() -> None:
 def test_validate_runtime_args_rejects_non_positive_parallelism() -> None:
     with pytest.raises(ValueError, match="--parallelism must be positive"):
         validate_runtime_args(make_args(parallelism=0))
+
+
+def test_validate_runtime_args_requires_model_artifact_for_model_strategy() -> None:
+    with pytest.raises(ValueError, match="model_artifact_path is required"):
+        validate_runtime_args(make_args(scoring_strategy="model"))

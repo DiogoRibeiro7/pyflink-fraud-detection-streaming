@@ -4,10 +4,17 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 from datetime import timedelta
+from pathlib import Path
 from typing import TextIO
 
 from fraud_streaming.config import DEFAULT_CONFIG, FraudConfig
 from fraud_streaming.features import compute_features, update_state
+from fraud_streaming.ml.scoring import (
+    ModelScorer,
+    ScoringConfig,
+    combine_scores,
+    compute_model_score,
+)
 from fraud_streaming.observability.metrics import LocalMetricsRegistry
 from fraud_streaming.quality import (
     DEFAULT_FUTURE_EVENT_TOLERANCE,
@@ -17,11 +24,15 @@ from fraud_streaming.quality import (
 from fraud_streaming.rules import build_alert, score_features
 from fraud_streaming.schemas import Alert, Transaction, UserProfileState
 
+DEFAULT_SCORING_CONFIG = ScoringConfig()
+
 
 def process_transaction(
     transaction: Transaction,
     states: dict[str, UserProfileState],
     config: FraudConfig = DEFAULT_CONFIG,
+    scoring_config: ScoringConfig = DEFAULT_SCORING_CONFIG,
+    model_scorer: ModelScorer | None = None,
 ) -> Alert:
     """Process one transaction and update the mutable state dictionary.
 
@@ -41,8 +52,20 @@ def process_transaction(
 
     state = states.get(transaction.key, UserProfileState())
     features = compute_features(transaction, state, config)
-    score = score_features(features, config)
-    alert = build_alert(features, score)
+    rule_score = score_features(features, config)
+    model_score = None
+    if scoring_config.strategy in {"model", "blend"}:
+        if model_scorer is None:
+            raise ValueError("model_scorer is required for model or blend strategy")
+        model_score = compute_model_score(model_scorer, features, transaction)
+    final_score = combine_scores(
+        rule_score=rule_score,
+        model_score=model_score,
+        strategy=scoring_config.strategy,
+        rule_weight=scoring_config.rule_weight,
+        model_weight=scoring_config.model_weight,
+    )
+    alert = build_alert(features, final_score)
     states[transaction.key] = update_state(transaction, state, config)
     return alert
 
@@ -54,6 +77,8 @@ def process_json_lines(
     dead_letter_handle: TextIO | None = None,
     future_tolerance: timedelta = DEFAULT_FUTURE_EVENT_TOLERANCE,
     metrics: LocalMetricsRegistry | None = None,
+    scoring_config: ScoringConfig = DEFAULT_SCORING_CONFIG,
+    model_scorer: ModelScorer | None = None,
 ) -> Iterator[Alert]:
     """Process JSON lines and yield alerts.
 
@@ -66,6 +91,8 @@ def process_json_lines(
             events as JSONL dead-letter records.
         future_tolerance: Allowed future skew for event timestamps.
         metrics: Optional local metrics registry for demo observability.
+        scoring_config: Rule/model scoring strategy configuration.
+        model_scorer: Optional loaded model scorer for model-aware strategies.
 
     Yields:
         Alert objects.
@@ -95,10 +122,25 @@ def process_json_lines(
         if validated.transaction is None:
             raise ValueError("validated transaction result cannot be empty")
         transaction = validated.transaction
-        alert = process_transaction(transaction, states, config)
+        alert = process_transaction(
+            transaction,
+            states,
+            config,
+            scoring_config=scoring_config,
+            model_scorer=model_scorer,
+        )
         if metrics is not None:
             metrics.record_processed_transaction(transaction, alert)
         if emit_low_risk or alert.risk_level != "low":
             if metrics is not None:
                 metrics.record_emitted_alert(alert)
             yield alert
+
+
+def load_model_scorer(scoring_config: ScoringConfig) -> ModelScorer | None:
+    """Load the optional model scorer for the requested strategy."""
+    if scoring_config.strategy == "rules":
+        return None
+    if scoring_config.model_artifact_path is None:
+        raise ValueError("model_artifact_path is required for model or blend strategy")
+    return ModelScorer.from_artifact(Path(scoring_config.model_artifact_path))
