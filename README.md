@@ -471,6 +471,45 @@ Interpretation note:
 
 - These metrics are useful for portfolio-grade monitoring demonstrations, but small samples can make drift estimates noisy.
 
+## Analyst feedback ingestion
+
+Build an offline feedback report from alert JSONL output and analyst review JSONL records:
+
+```bash
+poetry run fraud-feedback-report \
+  --alerts data/fraud_alerts.jsonl \
+  --feedback data/analyst_feedback.jsonl \
+  --output artifacts/feedback_report.json
+```
+
+Feedback records use these fields:
+
+- `transaction_id`
+- `reviewer_id`
+- `label`: `true_fraud`, `false_positive`, or `needs_review`
+- `comment`
+- `reviewed_at`
+
+The report includes:
+
+- precision by risk level, using reviewed alerts
+- false positive rate by human-readable rule reason
+- reviewed and unreviewed alert counts
+- unmatched feedback rows, so review data is not silently dropped
+
+To prepare a retraining dataset export, add the original transaction stream:
+
+```bash
+poetry run fraud-feedback-report \
+  --alerts data/fraud_alerts.jsonl \
+  --feedback data/analyst_feedback.jsonl \
+  --transactions data/sample_transactions.jsonl \
+  --output artifacts/feedback_report.json \
+  --retraining-output artifacts/retraining_feedback.jsonl
+```
+
+The retraining export joins canonical transaction-derived features, alert scores, analyst labels, and review metadata. `needs_review` items are preserved in the export with a null binary label instead of being silently coerced.
+
 ## Core features
 
 For each user/card stream, the project computes:

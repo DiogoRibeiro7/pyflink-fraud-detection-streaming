@@ -9,6 +9,7 @@ from math import sqrt
 from typing import Any, Literal
 
 RiskLevel = Literal["low", "elevated", "medium", "high"]
+AnalystLabel = Literal["true_fraud", "false_positive", "needs_review"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -243,4 +244,40 @@ class Alert:
                 "high_velocity": self.features.high_velocity,
                 "high_amount": self.features.high_amount,
             },
+        }
+
+
+@dataclass(frozen=True, slots=True)
+class AnalystFeedback:
+    """Analyst review feedback for a fraud alert or transaction."""
+
+    transaction_id: str
+    reviewer_id: str
+    label: AnalystLabel
+    comment: str
+    reviewed_at: datetime
+    alert_id: str | None = None
+
+    def __post_init__(self) -> None:
+        """Validate analyst feedback payload values."""
+        if not self.transaction_id:
+            raise ValueError("transaction_id cannot be empty")
+        if not self.reviewer_id:
+            raise ValueError("reviewer_id cannot be empty")
+        if self.label not in {"true_fraud", "false_positive", "needs_review"}:
+            raise ValueError("label must be one of: true_fraud, false_positive, needs_review")
+        if self.reviewed_at.tzinfo is None:
+            raise ValueError("reviewed_at must be timezone-aware")
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-compatible dictionary."""
+        return {
+            "transaction_id": self.transaction_id,
+            "reviewer_id": self.reviewer_id,
+            "label": self.label,
+            "comment": self.comment,
+            "reviewed_at": self.reviewed_at.astimezone(timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "alert_id": self.alert_id,
         }
