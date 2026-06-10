@@ -183,6 +183,54 @@ The Kafka path assumes the required Flink Kafka connector is available to the Fl
 
 Connector setup notes and troubleshooting live in [`docs/flink-kafka-connectors.md`](docs/flink-kafka-connectors.md).
 
+## Docker Compose streaming demo
+
+The repository includes a local streaming demo profile with:
+
+- Redpanda as the Kafka-compatible broker
+- a standalone Flink JobManager and TaskManager
+- optional producer and consumer containers
+
+Bring up the broker and Flink services:
+
+```bash
+make compose-up
+```
+
+Seed the `transactions` topic:
+
+```bash
+make produce-demo
+```
+
+Submit the Kafka-to-Kafka PyFlink job:
+
+```bash
+make run-flink-kafka-demo
+```
+
+Read alerts back from Kafka:
+
+```bash
+make consume-alerts
+```
+
+Tear the demo down:
+
+```bash
+make compose-down
+```
+
+Important connector note:
+
+- The compose demo does not bundle the Flink Kafka connector JAR automatically.
+- Place a Flink `1.19.x` compatible Kafka connector JAR under [`docker/flink/connectors`](docker/flink/connectors/README.md) before running the full Kafka/Flink path.
+
+Validation status:
+
+- `docker compose config` was used as the configuration-level validation target in the agent environment.
+- Full end-to-end execution with a real connector JAR still needs manual verification on a machine with Docker available.
+
 ## Example input event
 
 ```json

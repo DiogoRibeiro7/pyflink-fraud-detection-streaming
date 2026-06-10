@@ -1,6 +1,6 @@
 PYTHON ?= python
 
-.PHONY: install test lint typecheck quality local-demo demo format generate clean
+.PHONY: install test lint typecheck quality local-demo demo format generate compose-up compose-down produce-demo consume-alerts run-flink-kafka-demo clean
 
 install:
 	poetry install --with dev
@@ -26,6 +26,21 @@ demo: local-demo
 
 generate:
 	$(PYTHON) scripts/generate_transactions.py --output data/generated_transactions.jsonl --users 20 --transactions 500 --seed 7
+
+compose-up:
+	docker compose --profile streaming-demo up --build -d redpanda topic-init flink-jobmanager flink-taskmanager
+
+compose-down:
+	docker compose --profile streaming-demo down --remove-orphans
+
+produce-demo:
+	docker compose --profile streaming-demo run --rm fraud-producer
+
+consume-alerts:
+	docker compose --profile streaming-demo run --rm fraud-consumer
+
+run-flink-kafka-demo:
+	docker compose --profile streaming-demo run --rm flink-submit
 
 clean:
 	rm -rf .pytest_cache .ruff_cache .mypy_cache dist build *.egg-info

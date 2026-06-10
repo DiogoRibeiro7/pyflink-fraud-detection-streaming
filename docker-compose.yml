@@ -1,6 +1,7 @@
 services:
   redpanda:
     image: docker.redpanda.com/redpandadata/redpanda:v24.3.5
+    profiles: ["streaming-demo"]
     command:
       - redpanda
       - start
@@ -15,17 +16,123 @@ services:
       - "0"
       - --check=false
       - --kafka-addr
-      - PLAINTEXT://0.0.0.0:9092
+      - internal://0.0.0.0:29092,external://0.0.0.0:9092
       - --advertise-kafka-addr
-      - PLAINTEXT://localhost:9092
+      - internal://redpanda:29092,external://localhost:9092
     ports:
       - "9092:9092"
       - "9644:9644"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster info --brokers localhost:9092 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  topic-init:
+    image: docker.redpanda.com/redpandadata/redpanda:v24.3.5
+    profiles: ["streaming-demo"]
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    entrypoint: ["/bin/sh", "-lc"]
+    command: >
+      "rpk topic create transactions --brokers redpanda:29092 || true &&
+      rpk topic create fraud-alerts --brokers redpanda:29092 || true"
+
+  flink-jobmanager:
+    build:
+      context: .
+      dockerfile: docker/flink/Dockerfile
+    profiles: ["streaming-demo"]
+    depends_on:
+      redpanda:
+        condition: service_healthy
+    command: jobmanager
+    environment:
+      JOB_MANAGER_RPC_ADDRESS: flink-jobmanager
+    ports:
+      - "8081:8081"
+    volumes:
+      - .:/workspace
+      - ./docker/flink/connectors:/opt/flink/usrlib/connectors:ro
+
+  flink-taskmanager:
+    build:
+      context: .
+      dockerfile: docker/flink/Dockerfile
+    profiles: ["streaming-demo"]
+    depends_on:
+      - flink-jobmanager
+    command: taskmanager
+    environment:
+      JOB_MANAGER_RPC_ADDRESS: flink-jobmanager
+    volumes:
+      - .:/workspace
+      - ./docker/flink/connectors:/opt/flink/usrlib/connectors:ro
+
+  flink-submit:
+    build:
+      context: .
+      dockerfile: docker/flink/Dockerfile
+    profiles: ["streaming-demo"]
+    depends_on:
+      - topic-init
+      - flink-jobmanager
+      - flink-taskmanager
+    entrypoint: ["/bin/bash", "-lc"]
+    command: >
+      "flink run -py /workspace/src/fraud_streaming/flink_job.py
+      --pyFiles /workspace/src
+      --source kafka
+      --sink kafka
+      --bootstrap-servers redpanda:29092
+      --input-topic transactions
+      --output-topic fraud-alerts
+      --group-id fraud-detector"
+    volumes:
+      - .:/workspace
+      - ./docker/flink/connectors:/opt/flink/usrlib/connectors:ro
+
+  fraud-producer:
+    build: .
+    profiles: ["streaming-demo"]
+    depends_on:
+      - topic-init
+    command:
+      [
+        "python",
+        "-m",
+        "fraud_streaming.kafka.producer",
+        "--bootstrap-servers",
+        "redpanda:29092",
+        "--topic",
+        "transactions",
+        "--input",
+        "data/sample_transactions.jsonl",
+        "--sleep-ms",
+        "100"
+      ]
+
+  fraud-consumer:
+    build: .
+    profiles: ["streaming-demo"]
+    depends_on:
+      - topic-init
+    command:
+      [
+        "python",
+        "-m",
+        "fraud_streaming.kafka.consumer",
+        "--bootstrap-servers",
+        "redpanda:29092",
+        "--topic",
+        "fraud-alerts",
+        "--from-beginning",
+        "--summary"
+      ]
 
   fraud-local:
     build: .
-    depends_on:
-      - redpanda
     volumes:
       - .:/app
     command: ["data/sample_transactions.jsonl", "--show-all"]

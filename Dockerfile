@@ -15,7 +15,7 @@ COPY data ./data
 COPY scripts ./scripts
 
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -e .
+    && pip install --no-cache-dir -e ".[kafka]"
 
 ENTRYPOINT ["python", "-m", "fraud_streaming.cli"]
 CMD ["data/sample_transactions.jsonl", "--show-all"]
