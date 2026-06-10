@@ -1,8 +1,8 @@
 # PyFlink Fraud Detection Streaming
 
-A portfolio-ready streaming project that detects suspicious card transactions using **Apache Flink / PyFlink**, stateful feature engineering, and transparent fraud rules.
+A portfolio-grade streaming system for suspicious card transaction detection with **PyFlink**, stateful feature engineering, and explainable risk scoring.
 
-The repository is designed around a real production pattern:
+It mirrors a production-style flow while keeping the fraud logic in normal, testable Python:
 
 ```text
 Kafka transactions
@@ -16,7 +16,13 @@ risk scoring and alert generation
 Kafka / stdout / downstream store
 ```
 
-The important design choice is that the fraud logic is normal Python code and is covered by tests. PyFlink is used as the streaming runtime, not as a place to hide all business logic.
+## Highlights
+
+- Pure-Python fraud logic separated from Flink runtime wiring
+- Stateful per-user and per-card features for real-time scoring
+- Explainable alerts with human-readable fraud reasons
+- Local runner and tests that do not require Flink or Kafka
+- Clear extension path for Kafka, Iceberg, and ML scoring
 
 ## Why this project is useful
 
@@ -49,8 +55,7 @@ Apache Flink is built for stateful computations over bounded and unbounded strea
 │   └── sample_transactions.jsonl
 ├── docker-compose.yml
 ├── Dockerfile
-├── ROADMAP.md
-└── AGENTS.md
+└── ROADMAP.md
 ```
 
 ## Quick start without Flink
