@@ -67,7 +67,11 @@ def compute_features(
         raise TypeError("state must be a UserProfileState")
 
     max_retention = max(config.velocity_window_minutes, config.amount_window_minutes)
-    rolling = _prune_rolling_state(state.rolling_transactions, transaction.event_time_ms, max_retention)
+    rolling = _prune_rolling_state(
+        state.rolling_transactions,
+        transaction.event_time_ms,
+        max_retention,
+    )
 
     prior_count_5m = _count_transactions_since(
         rolling,
@@ -96,7 +100,9 @@ def compute_features(
         minutes_since_last_tx = max(delta_ms / MILLISECONDS_PER_MINUTE, 0.0)
 
     country_changed = state.last_country is not None and state.last_country != transaction.country
-    device_changed = state.last_device_id is not None and state.last_device_id != transaction.device_id
+    device_changed = (
+        state.last_device_id is not None and state.last_device_id != transaction.device_id
+    )
     card_not_present = not transaction.is_card_present
     night_transaction = _is_night_transaction(transaction)
     high_velocity = tx_count_5m >= config.high_velocity_threshold

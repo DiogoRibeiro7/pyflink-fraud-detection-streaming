@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fraud_streaming.schemas import Alert, Transaction
@@ -17,7 +17,7 @@ def parse_event_time(value: str) -> datetime:
     parsed = datetime.fromisoformat(normalized)
     if parsed.tzinfo is None:
         raise ValueError("event_time must include timezone information")
-    return parsed.astimezone(UTC)
+    return parsed.astimezone(timezone.utc)
 
 
 def _required_str(payload: dict[str, Any], field: str) -> str:

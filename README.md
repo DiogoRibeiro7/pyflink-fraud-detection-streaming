@@ -64,6 +64,7 @@ This mode is useful for reviewing the project and testing the fraud logic.
 
 ```bash
 poetry install --with dev
+make quality
 poetry run pytest
 poetry run fraud-local data/sample_transactions.jsonl
 ```
@@ -77,6 +78,16 @@ pip install -e . pytest
 pytest
 python -m fraud_streaming.cli data/sample_transactions.jsonl
 ```
+
+Useful local shortcuts:
+
+```bash
+make quality
+make test
+make local-demo
+```
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the local development workflow and optional extras.
 
 ## Generate synthetic transactions
 

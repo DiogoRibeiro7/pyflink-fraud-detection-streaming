@@ -6,9 +6,9 @@ from __future__ import annotations
 import argparse
 import json
 import random
-from datetime import UTC, datetime, timedelta
+from collections.abc import Sequence
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Sequence
 
 COUNTRIES = ["PT", "ES", "FR", "DE", "GB", "US", "NL"]
 CATEGORIES = ["grocery", "fuel", "restaurant", "travel", "electronics", "gaming", "atm"]
@@ -50,7 +50,7 @@ def generate_transactions(users: int, transactions: int, seed: int) -> list[dict
         raise ValueError("transactions must be positive")
 
     rng = random.Random(seed)
-    start = datetime(2026, 6, 10, 8, 0, tzinfo=UTC)
+    start = datetime(2026, 6, 10, 8, 0, tzinfo=timezone.utc)
     events: list[dict[str, object]] = []
 
     for index in range(transactions):
@@ -70,6 +70,12 @@ def generate_transactions(users: int, transactions: int, seed: int) -> list[dict
             amount = round(rng.uniform(700, 1_500), 2)
             event_time = start + timedelta(hours=2, minutes=index - 70)
 
+        device_id = (
+            f"device-{user_number:03d}"
+            if rng.random() < 0.9
+            else f"device-{rng.randint(1, users):03d}"
+        )
+
         events.append(
             {
                 "transaction_id": f"tx-{index + 1:06d}",
@@ -79,7 +85,7 @@ def generate_transactions(users: int, transactions: int, seed: int) -> list[dict
                 "amount": amount,
                 "currency": "EUR",
                 "country": country,
-                "device_id": f"device-{user_number:03d}" if rng.random() < 0.9 else f"device-{rng.randint(1, users):03d}",
+                "device_id": device_id,
                 "merchant_category": category,
                 "event_time": event_time.isoformat().replace("+00:00", "Z"),
                 "channel": channel,

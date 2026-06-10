@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import argparse
 import sys
-from typing import Iterable, Sequence
+from collections.abc import Sequence
+from typing import Any
 
 from fraud_streaming.features import compute_features, update_state
 from fraud_streaming.rules import build_alert, score_features
@@ -30,7 +31,7 @@ class FraudProcessFunction:  # pragma: no cover - exercised only with PyFlink ru
     """
 
     @staticmethod
-    def build():
+    def build() -> Any:
         """Build a KeyedProcessFunction subclass after PyFlink is available."""
         _require_pyflink()
 
@@ -38,12 +39,12 @@ class FraudProcessFunction:  # pragma: no cover - exercised only with PyFlink ru
         from pyflink.datastream import KeyedProcessFunction
         from pyflink.datastream.state import ValueStateDescriptor
 
-        class _FraudProcessFunction(KeyedProcessFunction):
-            def open(self, runtime_context):  # type: ignore[no-untyped-def]
+        class _FraudProcessFunction(KeyedProcessFunction):  # type: ignore[misc]
+            def open(self, runtime_context: Any) -> None:
                 descriptor = ValueStateDescriptor("profile_state", Types.STRING())
                 self.profile_state = runtime_context.get_state(descriptor)
 
-            def process_element(self, value, ctx):  # type: ignore[no-untyped-def]
+            def process_element(self, value: str, ctx: Any) -> Any:
                 transaction = transaction_from_json(value)
                 state = UserProfileState.from_json(self.profile_state.value())
                 features = compute_features(transaction, state)
@@ -72,16 +73,16 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _build_file_source(env, input_path: str):  # type: ignore[no-untyped-def]
+def _build_file_source(env: Any, input_path: str) -> Any:
     """Build a DataStream source from a local text file."""
     return env.read_text_file(input_path)
 
 
-def _build_kafka_source(env, args: argparse.Namespace):  # type: ignore[no-untyped-def]
+def _build_kafka_source(env: Any, args: argparse.Namespace) -> Any:
     """Build a Kafka source that emits JSON strings."""
     from pyflink.common.serialization import SimpleStringSchema
-    from pyflink.common.watermark_strategy import WatermarkStrategy
     from pyflink.datastream.connectors.kafka import KafkaSource, KafkaOffsetsInitializer
+    from pyflink.common.watermark_strategy import WatermarkStrategy
 
     source = (
         KafkaSource.builder()
@@ -95,12 +96,12 @@ def _build_kafka_source(env, args: argparse.Namespace):  # type: ignore[no-untyp
     return env.from_source(source, WatermarkStrategy.no_watermarks(), "transactions-kafka-source")
 
 
-def _write_stdout(alert_stream) -> None:  # type: ignore[no-untyped-def]
+def _write_stdout(alert_stream: Any) -> None:
     """Write alerts to stdout."""
     alert_stream.print()
 
 
-def _write_kafka(alert_stream, args: argparse.Namespace) -> None:  # type: ignore[no-untyped-def]
+def _write_kafka(alert_stream: Any, args: argparse.Namespace) -> None:
     """Write alerts to Kafka."""
     from pyflink.common.serialization import SimpleStringSchema
     from pyflink.connector.kafka import KafkaRecordSerializationSchema, KafkaSink

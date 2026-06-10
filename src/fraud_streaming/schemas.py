@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from math import sqrt
 from typing import Any, Literal
 
@@ -205,7 +205,7 @@ class Alert:
             "transaction_id": self.transaction_id,
             "user_id": self.user_id,
             "card_id": self.card_id,
-            "event_time": self.event_time.astimezone(UTC).isoformat(),
+            "event_time": self.event_time.astimezone(timezone.utc).isoformat(),
             "risk_score": self.risk_score,
             "risk_level": self.risk_level,
             "reasons": self.reasons,
