@@ -445,6 +445,32 @@ poetry run fraud-replay data/sample_transactions.jsonl --output-mode file --outp
 poetry run fraud-replay data/sample_transactions.jsonl --output-mode kafka --bootstrap-servers localhost:9092 --topic replay-transactions
 ```
 
+## Drift monitoring
+
+Generate a drift report between a reference JSONL stream and a current JSONL stream:
+
+```bash
+poetry run fraud-drift-report \
+  --reference data/sample_transactions.jsonl \
+  --current data/sample_transactions.jsonl \
+  --output artifacts/drift_report.json \
+  --markdown-output artifacts/drift_report.md \
+  --segment-by country \
+  --segment-by channel
+```
+
+The report includes:
+
+- PSI for fraud scores and selected numeric features
+- mean and standard deviation deltas
+- quantile deltas
+- optional KS statistics when `scipy` is installed
+- optional segment-level drift by country, merchant category, channel, and risk level
+
+Interpretation note:
+
+- These metrics are useful for portfolio-grade monitoring demonstrations, but small samples can make drift estimates noisy.
+
 ## Core features
 
 For each user/card stream, the project computes:
