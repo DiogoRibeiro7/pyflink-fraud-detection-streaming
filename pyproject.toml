@@ -36,6 +36,7 @@ mypy = ">=1.10"
 fraud-local = "fraud_streaming.cli:main"
 pyflink-fraud-job = "fraud_streaming.flink_job:main"
 fraud-produce-transactions = "fraud_streaming.kafka.producer:main"
+fraud-consume-alerts = "fraud_streaming.kafka.consumer:main"
 
 [build-system]
 requires = ["poetry-core>=1.8.0"]

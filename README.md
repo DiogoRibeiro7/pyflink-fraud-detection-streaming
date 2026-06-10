@@ -128,6 +128,30 @@ poetry run fraud-produce-transactions \
 
 The producer validates each event with the same canonical transaction schema used by the local runner and the Flink wrapper.
 
+## Consume fraud alerts from Kafka
+
+With the Kafka extra installed, you can inspect the alert stream produced by the Flink job:
+
+```bash
+poetry run fraud-consume-alerts \
+  --bootstrap-servers localhost:9092 \
+  --topic fraud-alerts \
+  --group-id fraud-demo \
+  --from-beginning \
+  --max-messages 20 \
+  --summary
+```
+
+Optional filters:
+
+```bash
+poetry run fraud-consume-alerts \
+  --bootstrap-servers localhost:9092 \
+  --topic fraud-alerts \
+  --risk-level high \
+  --min-risk-score 70
+```
+
 ## Run the PyFlink job locally
 
 Install the optional Flink dependency first:
