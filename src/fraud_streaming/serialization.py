@@ -79,6 +79,13 @@ def transaction_from_json(line: str) -> Transaction:
     return transaction_from_dict(payload)
 
 
+def transaction_to_json(transaction: Transaction) -> str:
+    """Serialize a Transaction to compact JSON."""
+    if not isinstance(transaction, Transaction):
+        raise TypeError("transaction must be a Transaction")
+    return json.dumps(transaction.to_dict(), separators=(",", ":"), sort_keys=True)
+
+
 def alert_to_json(alert: Alert) -> str:
     """Serialize an Alert to compact JSON."""
     if not isinstance(alert, Alert):

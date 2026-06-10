@@ -96,6 +96,38 @@ python scripts/generate_transactions.py --output data/generated_transactions.jso
 python -m fraud_streaming.cli data/generated_transactions.jsonl --show-all
 ```
 
+## Produce transactions to Kafka
+
+Install the optional Kafka extra:
+
+```bash
+poetry install --with dev -E kafka
+```
+
+Publish existing JSONL events:
+
+```bash
+poetry run fraud-produce-transactions \
+  --bootstrap-servers localhost:9092 \
+  --topic transactions \
+  --input data/sample_transactions.jsonl
+```
+
+Or generate and stream synthetic events progressively:
+
+```bash
+poetry run fraud-produce-transactions \
+  --bootstrap-servers localhost:9092 \
+  --topic transactions \
+  --users 20 \
+  --transactions 500 \
+  --seed 7 \
+  --sleep-ms 100 \
+  --key-field user_id
+```
+
+The producer validates each event with the same canonical transaction schema used by the local runner and the Flink wrapper.
+
 ## Run the PyFlink job locally
 
 Install the optional Flink dependency first:

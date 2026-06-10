@@ -57,6 +57,27 @@ class Transaction:
         """Return the state key used by the streaming job."""
         return f"{self.user_id}:{self.card_id}"
 
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-compatible dictionary."""
+        return {
+            "transaction_id": self.transaction_id,
+            "user_id": self.user_id,
+            "card_id": self.card_id,
+            "merchant_id": self.merchant_id,
+            "amount": self.amount,
+            "currency": self.currency,
+            "country": self.country,
+            "device_id": self.device_id,
+            "merchant_category": self.merchant_category,
+            "event_time": self.event_time.astimezone(timezone.utc)
+            .isoformat()
+            .replace("+00:00", "Z"),
+            "channel": self.channel,
+            "is_card_present": self.is_card_present,
+            "latitude": self.latitude,
+            "longitude": self.longitude,
+        }
+
 
 @dataclass(frozen=True, slots=True)
 class RollingTransaction:
