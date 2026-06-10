@@ -1,0 +1,166 @@
+# PyFlink Fraud Detection Streaming
+
+A portfolio-ready streaming project that detects suspicious card transactions using **Apache Flink / PyFlink**, stateful feature engineering, and transparent fraud rules.
+
+The repository is designed around a real production pattern:
+
+```text
+Kafka transactions
+        ↓
+PyFlink streaming job
+        ↓
+stateful per-user features
+        ↓
+risk scoring and alert generation
+        ↓
+Kafka / stdout / downstream store
+```
+
+The important design choice is that the fraud logic is normal Python code and is covered by tests. PyFlink is used as the streaming runtime, not as a place to hide all business logic.
+
+## Why this project is useful
+
+Fraud detection is a strong PyFlink use case because it needs:
+
+- low-latency decisions as transactions arrive;
+- keyed state per user, card, or account;
+- rolling-window behaviour such as transaction velocity;
+- late-event and event-time thinking;
+- explainable alerts that can be reviewed by analysts.
+
+Apache Flink is built for stateful computations over bounded and unbounded streams, and its Python DataStream API supports stream transformations such as filtering, state updates, windows, and aggregation.
+
+## Repository layout
+
+```text
+.
+├── src/fraud_streaming/
+│   ├── schemas.py          # Typed transaction, feature, state, and alert models
+│   ├── features.py         # Stateful feature engineering
+│   ├── rules.py            # Explainable fraud scoring rules
+│   ├── serialization.py    # JSON parsing and alert serialization
+│   ├── local_runner.py     # Local non-Flink runner for development and tests
+│   ├── flink_job.py        # PyFlink DataStream job
+│   └── cli.py              # Command-line entrypoints
+├── scripts/
+│   └── generate_transactions.py
+├── tests/
+├── data/
+│   └── sample_transactions.jsonl
+├── docker-compose.yml
+├── Dockerfile
+├── ROADMAP.md
+└── AGENTS.md
+```
+
+## Quick start without Flink
+
+This mode is useful for reviewing the project and testing the fraud logic.
+
+```bash
+poetry install --with dev
+poetry run pytest
+poetry run fraud-local data/sample_transactions.jsonl
+```
+
+Or with plain Python:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -e . pytest
+pytest
+python -m fraud_streaming.cli data/sample_transactions.jsonl
+```
+
+## Generate synthetic transactions
+
+```bash
+python scripts/generate_transactions.py --output data/generated_transactions.jsonl --users 20 --transactions 500 --seed 7
+python -m fraud_streaming.cli data/generated_transactions.jsonl --show-all
+```
+
+## Run the PyFlink job locally
+
+Install the optional Flink dependency first:
+
+```bash
+poetry install --with dev -E flink
+```
+
+Then run against a local JSONL file source:
+
+```bash
+poetry run pyflink-fraud-job \
+  --source file \
+  --input data/sample_transactions.jsonl \
+  --sink stdout
+```
+
+For Kafka:
+
+```bash
+poetry run pyflink-fraud-job \
+  --source kafka \
+  --bootstrap-servers localhost:9092 \
+  --input-topic transactions \
+  --output-topic fraud-alerts
+```
+
+The Kafka path assumes the required Flink Kafka connector is available to the Flink runtime. In managed Flink environments this is normally configured at the cluster/job level.
+
+## Example input event
+
+```json
+{
+  "transaction_id": "tx-000001",
+  "user_id": "user-001",
+  "card_id": "card-001",
+  "merchant_id": "merchant-042",
+  "amount": 42.50,
+  "currency": "EUR",
+  "country": "PT",
+  "device_id": "device-001",
+  "merchant_category": "grocery",
+  "event_time": "2026-06-10T12:00:00Z",
+  "channel": "pos",
+  "is_card_present": true
+}
+```
+
+## Example alert
+
+```json
+{
+  "transaction_id": "tx-000020",
+  "user_id": "user-001",
+  "card_id": "card-001",
+  "event_time": "2026-06-10T12:07:30+00:00",
+  "risk_score": 85,
+  "risk_level": "high",
+  "reasons": [
+    "transaction velocity is high",
+    "amount is unusual for the user",
+    "country changed recently"
+  ]
+}
+```
+
+## Core features
+
+For each user/card stream, the project computes:
+
+- transaction count in the last 5 minutes;
+- transaction amount in the last 1 hour;
+- minutes since previous transaction;
+- amount z-score against user history;
+- country change flag;
+- device change flag;
+- card-not-present flag;
+- night-time transaction flag.
+
+The default scoring is rule-based for transparency. This is intentional for a portfolio project: it shows the pipeline clearly before adding ML models.
+
+## Production extensions
+
+See [`ROADMAP.md`](ROADMAP.md) for the next stages: model scoring, feature store integration, Iceberg/S3 sink, drift monitoring, and CI/CD.

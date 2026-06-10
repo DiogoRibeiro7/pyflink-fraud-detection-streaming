@@ -1,0 +1,48 @@
+[tool.poetry]
+name = "pyflink-fraud-detection-streaming"
+version = "0.1.0"
+description = "Stateful fraud detection with PyFlink, Kafka-ready streaming, and explainable alerting."
+authors = ["Diogo Ribeiro <hansolo.dj@gmail.com>"]
+readme = "README.md"
+packages = [{ include = "fraud_streaming", from = "src" }]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+"apache-flink" = { version = ">=1.19,<2.3", optional = true }
+
+[tool.poetry.extras]
+flink = ["apache-flink"]
+
+[tool.poetry.group.dev.dependencies]
+pytest = ">=8.0"
+ruff = ">=0.8"
+mypy = ">=1.10"
+
+[tool.poetry.scripts]
+fraud-local = "fraud_streaming.cli:main"
+pyflink-fraud-job = "fraud_streaming.flink_job:main"
+
+[build-system]
+requires = ["poetry-core>=1.8.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "ANN", "SIM"]
+ignore = ["ANN101", "ANN102"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = true
+mypy_path = "src"
+warn_unused_ignores = true
+warn_return_any = true
+
+[[tool.mypy.overrides]]
+module = ["pyflink.*"]
+ignore_missing_imports = true

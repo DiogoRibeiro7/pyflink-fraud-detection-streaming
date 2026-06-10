@@ -1,0 +1,14 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+dist/
+build/
+*.egg-info/
+.DS_Store
+data/generated_transactions.jsonl
+.checkpoints/
+AGENTS.md
+CODE_AGENT_PROMPTS.md
