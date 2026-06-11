@@ -17,6 +17,7 @@ def make_args(**overrides: object) -> argparse.Namespace:
         "output_topic": "fraud-alerts",
         "group_id": "fraud-detector",
         "parallelism": 1,
+        "checkpoint_interval_ms": 30_000,
         "scoring_strategy": "rules",
         "model_artifact": None,
         "rule_weight": 0.5,
@@ -32,6 +33,7 @@ def test_validate_runtime_args_accepts_file_to_stdout_configuration() -> None:
     assert config.source == "file"
     assert config.sink == "stdout"
     assert config.input_path == "data/sample_transactions.jsonl"
+    assert config.checkpoint_interval_ms == 30_000
 
 
 def test_validate_runtime_args_requires_input_for_file_source() -> None:
@@ -62,6 +64,17 @@ def test_validate_runtime_args_requires_output_topic_for_kafka_sink() -> None:
 def test_validate_runtime_args_rejects_non_positive_parallelism() -> None:
     with pytest.raises(ValueError, match="--parallelism must be positive"):
         validate_runtime_args(make_args(parallelism=0))
+
+
+def test_validate_runtime_args_rejects_negative_checkpoint_interval() -> None:
+    with pytest.raises(ValueError, match="--checkpoint-interval-ms must be non-negative"):
+        validate_runtime_args(make_args(checkpoint_interval_ms=-1))
+
+
+def test_validate_runtime_args_allows_checkpointing_to_be_disabled() -> None:
+    config = validate_runtime_args(make_args(checkpoint_interval_ms=0))
+
+    assert config.checkpoint_interval_ms is None
 
 
 def test_validate_runtime_args_requires_model_artifact_for_model_strategy() -> None:

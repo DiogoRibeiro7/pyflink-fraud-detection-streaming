@@ -37,6 +37,7 @@ class FlinkJobConfig:
     model_artifact_path: Path | None
     rule_weight: float
     model_weight: float
+    checkpoint_interval_ms: int | None
 
 
 def _require_pyflink() -> None:
@@ -109,6 +110,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--group-id", default="fraud-detector")
     parser.add_argument("--parallelism", type=int, default=1)
     parser.add_argument(
+        "--checkpoint-interval-ms",
+        type=int,
+        default=30_000,
+        help="Checkpoint interval in milliseconds. Use 0 to disable checkpointing.",
+    )
+    parser.add_argument(
         "--scoring-strategy",
         choices=["rules", "model", "blend"],
         default="rules",
@@ -129,9 +136,12 @@ def validate_runtime_args(args: argparse.Namespace) -> FlinkJobConfig:
     output_topic = args.output_topic.strip()
     group_id = args.group_id.strip()
     input_path = args.input.strip() if isinstance(args.input, str) else args.input
+    checkpoint_interval_ms = args.checkpoint_interval_ms
 
     if args.parallelism <= 0:
         raise ValueError("--parallelism must be positive")
+    if checkpoint_interval_ms < 0:
+        raise ValueError("--checkpoint-interval-ms must be non-negative")
 
     if args.source == "file":
         if not input_path:
@@ -178,6 +188,7 @@ def validate_runtime_args(args: argparse.Namespace) -> FlinkJobConfig:
         model_artifact_path=scoring_config.model_artifact_path,
         rule_weight=scoring_config.rule_weight,
         model_weight=scoring_config.model_weight,
+        checkpoint_interval_ms=(None if checkpoint_interval_ms == 0 else checkpoint_interval_ms),
     )
 
 
@@ -251,7 +262,8 @@ def run_job(args: argparse.Namespace) -> None:  # pragma: no cover - requires Py
 
     env = StreamExecutionEnvironment.get_execution_environment()
     env.set_parallelism(config.parallelism)
-    env.enable_checkpointing(30_000)
+    if config.checkpoint_interval_ms is not None:
+        env.enable_checkpointing(config.checkpoint_interval_ms)
 
     if config.source == "file":
         if config.input_path is None:
