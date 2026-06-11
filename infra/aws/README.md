@@ -106,6 +106,7 @@ This repository's PyFlink wrapper is useful for local development and conceptual
 - decide whether Python support is operationally acceptable for the workload, or whether a Java/Scala translation is warranted for production
 
 See `env/flink-app.env.example` for the kind of configuration surfaces you typically need.
+Use [`managed-validation.md`](managed-validation.md) as the final smoke-test and evidence checklist before claiming a real AWS validation pass.
 
 ## Files in this directory
 

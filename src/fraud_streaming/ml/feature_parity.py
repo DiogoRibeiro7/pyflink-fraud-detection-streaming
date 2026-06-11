@@ -81,6 +81,7 @@ def build_feature_rows_from_jsonl(input_path: Path) -> list[TrainingExample]:
     """Build ordered feature rows from a JSONL file using the canonical training path."""
     payloads = iter_training_payloads(
         input_path=input_path,
+        input_format="jsonl",
         users=0,
         transactions=0,
         seed=0,

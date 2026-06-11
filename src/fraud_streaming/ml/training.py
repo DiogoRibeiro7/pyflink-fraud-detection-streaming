@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import pickle
 from collections.abc import Iterable, Sequence
@@ -91,6 +92,34 @@ class TrainingArtifacts:
     model_path: Path
     feature_schema_path: Path
     metrics_path: Path
+    provenance_path: Path
+
+
+@dataclass(frozen=True, slots=True)
+class DatasetProvenance:
+    """Documented provenance for a labelled or synthetic training dataset."""
+
+    dataset_name: str
+    input_format: str
+    label_column: str | None
+    source_url: str | None
+    license_name: str | None
+    notes: str | None
+    record_count: int
+    contains_input_labels: bool
+
+    def to_dict(self) -> dict[str, Any]:
+        """Return a JSON-compatible provenance payload."""
+        return {
+            "dataset_name": self.dataset_name,
+            "input_format": self.input_format,
+            "label_column": self.label_column,
+            "source_url": self.source_url,
+            "license_name": self.license_name,
+            "notes": self.notes,
+            "record_count": self.record_count,
+            "contains_input_labels": self.contains_input_labels,
+        }
 
 
 def _require_sklearn() -> tuple[type[Any], type[Any]]:
@@ -124,6 +153,39 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--seed", type=int, default=42, help="Synthetic generation seed.")
     parser.add_argument(
+        "--input-format",
+        choices=["auto", "jsonl", "csv"],
+        default="auto",
+        help="Input format for --input. Defaults to suffix-based detection.",
+    )
+    parser.add_argument(
+        "--label-column",
+        default="label",
+        help="Label column name for labelled input datasets.",
+    )
+    parser.add_argument(
+        "--dataset-name",
+        default="synthetic_demo",
+        help="Human-readable dataset name stored in provenance metadata.",
+    )
+    parser.add_argument(
+        "--dataset-url",
+        help="Optional dataset source URL stored in provenance metadata.",
+    )
+    parser.add_argument(
+        "--dataset-license",
+        help="Optional dataset license or usage note stored in provenance metadata.",
+    )
+    parser.add_argument(
+        "--provenance-notes",
+        help="Optional free-form provenance notes stored with the model artifacts.",
+    )
+    parser.add_argument(
+        "--require-input-labels",
+        action="store_true",
+        help="Fail if the input dataset does not include the requested label column.",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("artifacts"),
@@ -153,6 +215,22 @@ def validate_args(args: argparse.Namespace) -> None:
 
     if not 0 < args.test_fraction < 0.5:
         raise ValueError("--test-fraction must be between 0 and 0.5")
+    if not args.label_column.strip():
+        raise ValueError("--label-column must not be empty")
+    if not args.dataset_name.strip():
+        raise ValueError("--dataset-name must not be empty")
+
+
+def detect_input_format(input_path: Path | None, requested_format: str) -> str:
+    """Resolve the effective input format for the training dataset."""
+    if input_path is None:
+        return "synthetic"
+    if requested_format != "auto":
+        return requested_format
+    suffix = input_path.suffix.lower()
+    if suffix == ".csv":
+        return "csv"
+    return "jsonl"
 
 
 def build_feature_dict(features: FraudFeatures, transaction: Transaction) -> dict[str, float | str]:
@@ -212,12 +290,28 @@ def derive_synthetic_label(features: FraudFeatures, transaction: Transaction) ->
 def iter_training_payloads(
     *,
     input_path: Path | None,
+    input_format: str,
     users: int,
     transactions: int,
     seed: int,
 ) -> Iterable[dict[str, Any]]:
     """Yield raw payloads from JSONL input or synthetic generation."""
     if input_path is not None:
+        if input_format == "csv":
+            with input_path.open("r", encoding="utf-8", newline="") as handle:
+                reader = csv.DictReader(handle)
+                if reader.fieldnames is None:
+                    raise ValueError("CSV training input must include a header row")
+                for _line_number, row in enumerate(reader, start=2):
+                    payload = {
+                        key: _coerce_csv_value(key, value)
+                        for key, value in row.items()
+                        if key is not None
+                    }
+                    if not payload:
+                        continue
+                    yield payload
+            return
         with input_path.open("r", encoding="utf-8") as handle:
             for line_number, raw_line in enumerate(handle, start=1):
                 line = raw_line.strip()
@@ -235,25 +329,48 @@ def iter_training_payloads(
         yield payload
 
 
+def _coerce_csv_value(field_name: str, value: str | None) -> Any:
+    """Coerce a CSV string field into the closest canonical Python type."""
+    if value is None:
+        return None
+    if field_name in {"amount", "latitude", "longitude"}:
+        return float(value)
+    if field_name == "is_card_present":
+        return value.strip().lower() in {"true", "1", "yes"}
+    if field_name in {"label", "fraud_flag", "is_fraud"}:
+        return value.strip()
+    return value
+
+
 def build_training_dataset(
     payloads: Iterable[dict[str, Any]],
+    *,
+    label_column: str = "label",
+    require_input_labels: bool = False,
     config: FraudConfig = DEFAULT_CONFIG,
 ) -> TrainingDataset:
     """Build an offline feature table from streaming-style feature logic."""
     states: dict[str, UserProfileState] = {}
     examples: list[TrainingExample] = []
+    saw_input_label = False
 
     for payload in payloads:
         transaction = transaction_from_dict(payload)
         state = states.get(transaction.key, UserProfileState())
         features = compute_features(transaction, state, config)
-        label_value = payload.get("label")
+        label_value = payload.get(label_column)
         if label_value is None:
+            if require_input_labels:
+                raise ValueError(
+                    f"label column '{label_column}' is required but missing for "
+                    f"transaction_id={transaction.transaction_id}"
+                )
             label = derive_synthetic_label(features, transaction)
             label_source = "synthetic_demo_label"
         else:
             label = validate_label_value(label_value)
             label_source = "input_label"
+            saw_input_label = True
 
         examples.append(
             TrainingExample(
@@ -268,6 +385,8 @@ def build_training_dataset(
 
     if not examples:
         raise ValueError("training dataset is empty")
+    if require_input_labels and not saw_input_label:
+        raise ValueError(f"label column '{label_column}' was not found in the input dataset")
 
     return TrainingDataset(examples=examples, feature_schema=CANONICAL_FEATURE_SCHEMA)
 
@@ -381,6 +500,7 @@ def save_artifacts(
     *,
     output_dir: Path,
     dataset: TrainingDataset,
+    provenance: DatasetProvenance,
     model_bundle: dict[str, Any],
     metrics: dict[str, Any],
 ) -> TrainingArtifacts:
@@ -391,6 +511,7 @@ def save_artifacts(
     model_path = run_dir / "model.pkl"
     feature_schema_path = run_dir / "feature_schema.json"
     metrics_path = run_dir / "metrics.json"
+    provenance_path = run_dir / "dataset_provenance.json"
 
     with model_path.open("wb") as handle:
         pickle.dump(model_bundle, handle)
@@ -407,26 +528,37 @@ def save_artifacts(
         encoding="utf-8",
     )
     metrics_path.write_text(json.dumps(metrics, indent=2, sort_keys=True), encoding="utf-8")
+    provenance_path.write_text(
+        json.dumps(provenance.to_dict(), indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
     return TrainingArtifacts(
         run_dir=run_dir,
         model_path=model_path,
         feature_schema_path=feature_schema_path,
         metrics_path=metrics_path,
+        provenance_path=provenance_path,
     )
 
 
 def train_model(args: argparse.Namespace) -> TrainingArtifacts:
     """Train the optional baseline fraud model and save artifacts."""
     DictVectorizer, LogisticRegression = _require_sklearn()
+    input_format = detect_input_format(args.input, args.input_format)
 
     payloads = iter_training_payloads(
         input_path=args.input,
+        input_format=input_format,
         users=args.users,
         transactions=args.transactions,
         seed=args.seed,
     )
-    dataset = build_training_dataset(payloads)
+    dataset = build_training_dataset(
+        payloads,
+        label_column=args.label_column,
+        require_input_labels=args.require_input_labels,
+    )
     train_examples, test_examples = _train_test_split(dataset.examples, args.test_fraction)
 
     vectorizer = DictVectorizer(sparse=False)
@@ -446,6 +578,8 @@ def train_model(args: argparse.Namespace) -> TrainingArtifacts:
         "Synthetic demo labels were used when no input label column was present. "
         "They are only for pipeline demonstration and not real fraud ground truth."
     )
+    metrics["dataset_name"] = args.dataset_name
+    metrics["input_format"] = input_format
 
     vectorized_feature_names = list(vectorizer.vocabulary_.keys())
     model_bundle = {
@@ -454,9 +588,20 @@ def train_model(args: argparse.Namespace) -> TrainingArtifacts:
         "vectorized_feature_names": vectorized_feature_names,
         "raw_feature_schema": list(dataset.feature_schema),
     }
+    provenance = DatasetProvenance(
+        dataset_name=args.dataset_name,
+        input_format=input_format,
+        label_column=(args.label_column if "input_label" in metrics["label_sources"] else None),
+        source_url=args.dataset_url,
+        license_name=args.dataset_license,
+        notes=args.provenance_notes,
+        record_count=len(dataset.examples),
+        contains_input_labels="input_label" in metrics["label_sources"],
+    )
     return save_artifacts(
         output_dir=args.output_dir,
         dataset=dataset,
+        provenance=provenance,
         model_bundle=model_bundle,
         metrics=metrics,
     )
@@ -477,4 +622,5 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"Model: {artifacts.model_path}")
     print(f"Feature schema: {artifacts.feature_schema_path}")
     print(f"Metrics: {artifacts.metrics_path}")
+    print(f"Dataset provenance: {artifacts.provenance_path}")
     return 0

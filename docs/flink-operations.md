@@ -144,24 +144,26 @@ At minimum, decide:
 
 ## Event time and late events
 
-The current Kafka/file PyFlink wrapper uses:
+The wrapper now supports optional event-time watermarks and explicit late-event handling through:
 
-- `WatermarkStrategy.no_watermarks()`
-
-That means the current wrapper is not using event-time watermarks for late-data handling. The pure fraud logic still reads `event_time` from each transaction, but Flink itself is not managing lateness semantics through watermark progression in this job today.
+- `--watermark-max-out-of-orderness-ms`
+- `--allowed-lateness-ms`
+- `--late-event-policy process|drop`
 
 Operational implication:
 
-- late or out-of-order events are still parsed and can affect keyed features
-- there is no explicit watermark-driven late-event policy in the current wrapper
-- if you later add event-time windows or timers, checkpoint and recovery behaviour must be re-evaluated with watermark semantics in mind
+- when watermark flags are omitted, the previous "process everything" behaviour still applies
+- when watermarks are enabled, event timestamps are extracted from the canonical transaction `event_time`
+- when `--late-event-policy=drop`, events older than `current_watermark - allowed_lateness_ms` are skipped before keyed state is updated
+- if you later add windows or timers, keep their watermark semantics aligned with this late-event policy
 
 ## State schema evolution risks
 
 The most important upgrade risk in this project is `UserProfileState` compatibility.
 
-Today the state is persisted as JSON with fields such as:
+Today the state is persisted as JSON with an explicit schema version and fields such as:
 
+- `schema_version`
 - `count`
 - `amount_mean`
 - `amount_m2`
@@ -182,8 +184,11 @@ Safer evolution practices:
 
 - add fields in backward-compatible ways with defaults
 - keep old field names readable during migrations
+- version the serialized payload and reject unknown future versions loudly
 - test `from_json()` against representative old state payloads before deployment
 - take a savepoint before changing keyed state structure or key selection logic
+
+The repository now includes compatibility fixtures under `tests/fixtures/state/` so older saved payloads can be exercised during ordinary test runs.
 
 ## Suggested upgrade runbook
 

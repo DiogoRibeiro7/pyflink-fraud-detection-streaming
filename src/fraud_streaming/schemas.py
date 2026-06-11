@@ -6,7 +6,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from math import sqrt
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 RiskLevel = Literal["low", "elevated", "medium", "high"]
 AnalystLabel = Literal["true_fraud", "false_positive", "needs_review"]
@@ -98,6 +98,8 @@ class UserProfileState:
     rolling transaction list is intentionally small and pruned on every event.
     """
 
+    SCHEMA_VERSION: ClassVar[int] = 2
+
     count: int = 0
     amount_mean: float = 0.0
     amount_m2: float = 0.0
@@ -141,6 +143,7 @@ class UserProfileState:
     def to_dict(self) -> dict[str, Any]:
         """Serialize state to a JSON-compatible dictionary."""
         return {
+            "schema_version": self.SCHEMA_VERSION,
             "count": self.count,
             "amount_mean": self.amount_mean,
             "amount_m2": self.amount_m2,
@@ -153,6 +156,9 @@ class UserProfileState:
     @classmethod
     def from_dict(cls, value: dict[str, Any]) -> UserProfileState:
         """Create state from a dictionary."""
+        schema_version = int(value.get("schema_version", 1))
+        if schema_version not in {1, cls.SCHEMA_VERSION}:
+            raise ValueError(f"unsupported state schema_version: {schema_version}")
         rolling = [
             RollingTransaction(
                 amount=float(item["amount"]),
@@ -168,7 +174,11 @@ class UserProfileState:
             amount_m2=float(value.get("amount_m2", 0.0)),
             last_country=value.get("last_country"),
             last_device_id=value.get("last_device_id"),
-            last_event_time_ms=value.get("last_event_time_ms"),
+            last_event_time_ms=(
+                None
+                if value.get("last_event_time_ms") is None
+                else int(value["last_event_time_ms"])
+            ),
             rolling_transactions=rolling,
         )
 

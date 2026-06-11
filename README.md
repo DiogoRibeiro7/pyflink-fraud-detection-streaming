@@ -268,6 +268,26 @@ poetry run pyflink-fraud-job \
 
 The Kafka path assumes the required Flink Kafka connector is available to the Flink runtime. In managed Flink environments this is normally configured at the cluster/job level.
 
+To enable explicit event-time watermarks and late-event handling:
+
+```bash
+poetry run pyflink-fraud-job \
+  --source kafka \
+  --bootstrap-servers localhost:9092 \
+  --input-topic transactions \
+  --output-topic fraud-alerts \
+  --watermark-max-out-of-orderness-ms 30000 \
+  --allowed-lateness-ms 5000 \
+  --late-event-policy drop
+```
+
+With those flags:
+
+- timestamps are extracted from the canonical transaction `event_time`
+- bounded out-of-orderness watermarks are enabled
+- events older than the current watermark beyond the allowed lateness are dropped when `--late-event-policy=drop`
+- default behaviour remains unchanged when watermark flags are omitted
+
 Connector setup notes and troubleshooting live in [`docs/flink-kafka-connectors.md`](docs/flink-kafka-connectors.md).
 Operational notes for checkpointing, savepoints, keyed state, and recovery live in [`docs/flink-operations.md`](docs/flink-operations.md).
 
@@ -362,6 +382,7 @@ Important scope note:
 - these are portfolio-grade templates and placeholders, not one-click production deployments
 - all values under `infra/aws/env/*.example` are placeholders only
 - the Terraform files are a coherent skeleton for names, tags, VPC inputs, and storage identifiers, not a fully provisioned streaming stack
+- the managed-cloud validation checklist for a real AWS environment lives in [`infra/aws/managed-validation.md`](infra/aws/managed-validation.md)
 
 ## Sample Outputs
 
@@ -514,6 +535,7 @@ Each run writes a versioned artifact directory containing:
 - `model.pkl`
 - `feature_schema.json`
 - `metrics.json`
+- `dataset_provenance.json`
 
 The saved metrics include precision, recall, F1, ROC-AUC when the evaluation split contains both classes, and a threshold analysis table.
 
@@ -522,6 +544,22 @@ Important label note:
 - If the input data includes a `label` field, it must be binary `0/1` or boolean.
 - If no label is present, the pipeline creates synthetic demo labels from transparent heuristics so the ML workflow can be demonstrated.
 - Those synthetic labels are not real fraud ground truth and should not be presented as such.
+
+For a manually supplied labelled dataset with explicit provenance:
+
+```bash
+poetry run fraud-train-model \
+  --input data/public/labelled_transactions.csv \
+  --input-format csv \
+  --label-column is_fraud \
+  --dataset-name manual-public-labelled-set \
+  --dataset-url https://example.com/dataset-card-fraud \
+  --dataset-license "See upstream dataset terms" \
+  --provenance-notes "Manual local download; not redistributed in this repository." \
+  --require-input-labels
+```
+
+More guidance lives in [`docs/public-dataset-evaluation.md`](docs/public-dataset-evaluation.md).
 
 ## Model Scoring During Inference
 
@@ -675,6 +713,24 @@ poetry run fraud-feedback-report \
 ```
 
 The retraining export joins canonical transaction-derived features, alert scores, analyst labels, and review metadata. `needs_review` items are preserved in the export with a null binary label instead of being silently coerced.
+
+For a lightweight offline analyst review surface on top of the same feedback schema:
+
+```bash
+poetry run fraud-review-ui \
+  --alerts data/fraud_alerts.jsonl \
+  --feedback data/analyst_feedback.jsonl \
+  --output artifacts/review.html
+```
+
+That command generates a self-contained HTML page that:
+
+- filters alerts by risk level and review status
+- preloads the latest existing feedback row per transaction
+- lets a reviewer edit labels and comments locally in the browser
+- exports canonical feedback JSONL for `fraud-feedback-report`
+
+See [`docs/analyst-review-ui.md`](docs/analyst-review-ui.md).
 
 ## Benchmarks
 

@@ -1,0 +1,22 @@
+{
+  "count": 3,
+  "amount_mean": 42.5,
+  "amount_m2": 18.0,
+  "last_country": "PT",
+  "last_device_id": "device-1",
+  "last_event_time_ms": 1718020860000,
+  "rolling_transactions": [
+    {
+      "amount": 20.0,
+      "event_time_ms": 1718020800000,
+      "country": "PT",
+      "device_id": "device-1"
+    },
+    {
+      "amount": 65.0,
+      "event_time_ms": 1718020860000,
+      "country": "PT",
+      "device_id": "device-1"
+    }
+  ]
+}

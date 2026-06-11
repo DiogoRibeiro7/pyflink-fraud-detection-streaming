@@ -53,7 +53,7 @@
 ## Stage 7 — Stretch ideas
 
 - [ ] Evaluate on a public or organization-provided labelled fraud dataset with clear provenance notes.
-- [ ] Add event-time watermarks and explicit late-event behaviour in the PyFlink wrapper.
-- [ ] Add state compatibility fixtures for upgrade testing across saved `UserProfileState` payload versions.
-- [ ] Add a lightweight analyst review UI on top of the feedback ingestion flow.
+- [x] Add event-time watermarks and explicit late-event behaviour in the PyFlink wrapper.
+- [x] Add state compatibility fixtures for upgrade testing across saved `UserProfileState` payload versions.
+- [x] Add a lightweight analyst review UI on top of the feedback ingestion flow.
 - [ ] Add end-to-end managed-cloud deployment validation in a real AWS environment.

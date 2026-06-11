@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "count": 4,
+  "amount_mean": 58.25,
+  "amount_m2": 122.5,
+  "last_country": "US",
+  "last_device_id": "device-9",
+  "last_event_time_ms": 1718020920000,
+  "rolling_transactions": [
+    {
+      "amount": 80.0,
+      "event_time_ms": 1718020860000,
+      "country": "GB",
+      "device_id": "device-7"
+    },
+    {
+      "amount": 95.0,
+      "event_time_ms": 1718020920000,
+      "country": "US",
+      "device_id": "device-9"
+    }
+  ]
+}

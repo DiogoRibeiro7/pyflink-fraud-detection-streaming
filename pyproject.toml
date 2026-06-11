@@ -47,6 +47,7 @@ fraud-check-feature-parity = "fraud_streaming.ml.feature_parity:main"
 fraud-replay = "fraud_streaming.replay:main"
 fraud-drift-report = "fraud_streaming.monitoring.drift:main"
 fraud-feedback-report = "fraud_streaming.feedback:main"
+fraud-review-ui = "fraud_streaming.review_ui:main"
 
 [build-system]
 requires = ["poetry-core>=1.8.0"]
