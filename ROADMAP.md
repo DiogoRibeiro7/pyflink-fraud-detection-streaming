@@ -28,7 +28,7 @@
 
 ## Stage 4 — Lakehouse and observability
 
-- [x] Write raw transactions and alerts to Apache Iceberg.
+- [ ] Write raw transactions and alerts to Apache Iceberg.
 - [x] Add event quality checks.
 - [x] Add Prometheus-friendly metrics.
 - [x] Add dead-letter handling for malformed events.
