@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
-
-import pytest
 
 from fraud_streaming.aws_validation import (
     build_validation_report,
