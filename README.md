@@ -384,6 +384,19 @@ Important scope note:
 - the Terraform files are a coherent skeleton for names, tags, VPC inputs, and storage identifiers, not a fully provisioned streaming stack
 - the managed-cloud validation checklist for a real AWS environment lives in [`infra/aws/managed-validation.md`](infra/aws/managed-validation.md)
 
+There is also a pre-flight validation CLI for adapted AWS env files:
+
+```bash
+poetry run fraud-aws-validate \
+  --mode msk \
+  --env-file infra/aws/env/msk.env \
+  --flink-env-file infra/aws/env/flink-app.env \
+  --output artifacts/aws_validation_report.json \
+  --markdown-output artifacts/aws_validation_report.md
+```
+
+That command checks for missing required values, placeholder leakage, and obvious mode mismatches before a real managed-cloud validation run.
+
 ## Sample Outputs
 
 Checked-in examples from real runs in this repository:

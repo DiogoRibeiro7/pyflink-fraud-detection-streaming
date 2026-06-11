@@ -42,6 +42,25 @@ Capture these artifacts during the real AWS validation run:
 - confirm connector and dependency JAR requirements for the deployed Flink runtime
 - confirm the PyFlink artifact version matches the target managed runtime
 
+Before any real deployment, run the repository's AWS validation helper against your adapted env files:
+
+```bash
+poetry run fraud-aws-validate \
+  --mode msk \
+  --env-file infra/aws/env/msk.env \
+  --flink-env-file infra/aws/env/flink-app.env \
+  --output artifacts/aws_validation_report.json \
+  --markdown-output artifacts/aws_validation_report.md
+```
+
+Use `--mode kinesis` with the Kinesis env file for the Kinesis path. The command checks for:
+
+- missing required keys
+- placeholder values that were never replaced
+- source-kind mismatches between the mode-specific env file and the Flink app env file
+
+It does not talk to AWS. Its job is to catch obvious template mistakes before you start the real managed-cloud validation run.
+
 ## Smoke validation flow
 
 1. Provision the chosen AWS template inputs.

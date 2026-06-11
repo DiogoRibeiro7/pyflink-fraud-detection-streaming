@@ -114,6 +114,7 @@ Use [`managed-validation.md`](managed-validation.md) as the final smoke-test and
 - `env/kinesis.env.example`: placeholder variables for a Kinesis-backed deployment
 - `env/flink-app.env.example`: placeholder Managed Flink application properties
 - `terraform/`: coherent but minimal Terraform skeleton showing network and naming variables
+- `managed-validation.md`: runbook and CLI-driven pre-flight validation process
 
 ## Before deploying anything
 
