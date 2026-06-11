@@ -1,28 +1,31 @@
 # HELP fraud_alerts_emitted_total Total number of emitted alerts after local filtering.
 # TYPE fraud_alerts_emitted_total counter
-fraud_alerts_emitted_total 8
+fraud_alerts_emitted_total 16
 # HELP fraud_events_by_channel_total Processed transactions by channel.
 # TYPE fraud_events_by_channel_total counter
-fraud_events_by_channel_total{channel="online"} 2
-fraud_events_by_channel_total{channel="pos"} 6
+fraud_events_by_channel_total{channel="online"} 4
+fraud_events_by_channel_total{channel="pos"} 12
 # HELP fraud_events_by_country_total Processed transactions by country.
 # TYPE fraud_events_by_country_total counter
-fraud_events_by_country_total{country="PT"} 7
-fraud_events_by_country_total{country="US"} 1
+fraud_events_by_country_total{country="FR"} 2
+fraud_events_by_country_total{country="GB"} 1
+fraud_events_by_country_total{country="PT"} 11
+fraud_events_by_country_total{country="US"} 2
 # HELP fraud_events_by_risk_level_total Processed transactions by risk level.
 # TYPE fraud_events_by_risk_level_total counter
 fraud_events_by_risk_level_total{risk_level="elevated"} 2
-fraud_events_by_risk_level_total{risk_level="high"} 1
-fraud_events_by_risk_level_total{risk_level="low"} 5
+fraud_events_by_risk_level_total{risk_level="high"} 2
+fraud_events_by_risk_level_total{risk_level="low"} 11
+fraud_events_by_risk_level_total{risk_level="medium"} 1
 # HELP fraud_high_risk_alerts_total Total number of emitted high-risk alerts.
 # TYPE fraud_high_risk_alerts_total counter
-fraud_high_risk_alerts_total 1
+fraud_high_risk_alerts_total 2
 # HELP fraud_malformed_events_total Total number of malformed or rejected input events.
 # TYPE fraud_malformed_events_total counter
 fraud_malformed_events_total 0
 # HELP fraud_transactions_processed_total Total number of successfully processed transactions.
 # TYPE fraud_transactions_processed_total counter
-fraud_transactions_processed_total 8
+fraud_transactions_processed_total 16
 # HELP fraud_average_risk_score Average risk score of successfully processed transactions.
 # TYPE fraud_average_risk_score gauge
-fraud_average_risk_score 18.125
+fraud_average_risk_score 16.875
