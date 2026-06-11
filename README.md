@@ -247,6 +247,35 @@ Validation status:
 - `docker compose config` was used as the configuration-level validation target in the agent environment.
 - Full end-to-end execution with a real connector JAR still needs manual verification on a machine with Docker available.
 
+## Local Docker image
+
+Build the project image locally:
+
+```bash
+docker build -t pyflink-fraud-detection-streaming:local .
+```
+
+Run the default local demo command inside the image:
+
+```bash
+docker run --rm pyflink-fraud-detection-streaming:local
+```
+
+Override the command to process a mounted transaction file:
+
+```bash
+docker run --rm \
+  -v "$(pwd)/data:/app/data" \
+  pyflink-fraud-detection-streaming:local \
+  data/sample_transactions.jsonl --show-all
+```
+
+Publishing notes:
+
+- GitHub Actions publishes the image only for tags matching `v*.*.*` and manual workflow dispatch.
+- The default target registry is GitHub Container Registry, using `ghcr.io/<owner>/<repo>`.
+- Normal branch pushes do not publish Docker images.
+
 ## Example input event
 
 ```json

@@ -1,7 +1,8 @@
 FROM python:3.11-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
 
 WORKDIR /app
 
@@ -14,8 +15,9 @@ COPY src ./src
 COPY data ./data
 COPY scripts ./scripts
 
-RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -e ".[kafka]"
+RUN pip install --upgrade pip \
+    && pip install -e . \
+    && pip install "kafka-python>=2.0.2,<3.0.0"
 
 ENTRYPOINT ["python", "-m", "fraud_streaming.cli"]
 CMD ["data/sample_transactions.jsonl", "--show-all"]
