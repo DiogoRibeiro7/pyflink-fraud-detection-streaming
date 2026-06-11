@@ -22,10 +22,13 @@ classifiers = [
 python = ">=3.10,<3.13"
 "apache-flink" = { version = ">=1.19,<2.3", optional = true }
 "kafka-python" = { version = ">=2.0.2,<3.0.0", optional = true }
+"pyarrow" = { version = ">=17,<22", optional = true }
+"pyiceberg" = { version = ">=0.7,<1.0", optional = true }
 "scikit-learn" = { version = ">=1.5,<2.0", optional = true }
 
 [tool.poetry.extras]
 flink = ["apache-flink"]
+iceberg = ["pyarrow", "pyiceberg"]
 kafka = ["kafka-python"]
 ml = ["scikit-learn"]
 

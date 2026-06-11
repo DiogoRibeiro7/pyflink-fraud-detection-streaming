@@ -5,7 +5,7 @@ This repository now includes a typed sink abstraction layer for two record famil
 - `TransactionSink` for validated raw transactions
 - `AlertSink` for emitted fraud alerts
 
-The runnable local fallback is file-based. The Iceberg path is intentionally documented as an extension point rather than presented as a fully production-ready local demo.
+The runnable local fallback is still file-based, but the local CLI can now write both record families to Apache Iceberg through `pyiceberg`.
 
 ## What works now
 
@@ -14,6 +14,7 @@ For the local CLI (`fraud-local`), you can route records to:
 - `stdout` for alerts
 - JSONL files for alerts and transactions
 - Parquet files for alerts and transactions when `pyarrow` is installed
+- Iceberg tables for alerts and transactions when `pyiceberg` and `pyarrow` are installed
 
 Example:
 
@@ -44,22 +45,38 @@ The codebase includes `src/fraud_streaming/sinks/iceberg.py` with:
 - `IcebergTransactionSink`
 - `IcebergAlertSink`
 
-Those classes validate optional dependencies and provide the shape for future append logic, but they do not pretend to offer a fully validated end-to-end Iceberg writer in this repository yet.
+Those classes validate optional dependencies, bootstrap or load the target table, and append Arrow batches through `pyiceberg` on sink close.
 
 Current behaviour:
 
 - if `pyiceberg` is missing, the CLI fails with a clear installation error
-- if `pyiceberg` is installed, the sink still raises a clear runtime message explaining that append logic must be completed for the target catalog
+- SQL catalogs are inferred from SQLAlchemy-style URIs such as `sqlite:///...` or `postgresql://...`
+- REST catalogs are inferred from `http://...` or `https://...` endpoints
+- target namespaces are created if missing and target tables are created on first write using the observed Arrow schema
+- records are appended in one batch per sink close
 
-This is deliberate. Iceberg environments vary significantly across catalogs, credentials, and object stores, so a fake "works everywhere" implementation would be misleading.
+Example using the lightweight SQL catalog flow from the PyIceberg docs:
+
+```bash
+poetry install --with dev -E iceberg
+poetry run fraud-local data/sample_transactions.jsonl \
+  --show-all \
+  --alert-sink iceberg \
+  --transaction-sink iceberg \
+  --iceberg-catalog-uri sqlite:///artifacts/iceberg/catalog.db \
+  --iceberg-warehouse artifacts/iceberg/warehouse \
+  --iceberg-alert-table fraud.alerts \
+  --iceberg-transaction-table fraud.transactions
+```
+
+This repository keeps the local Iceberg path intentionally lightweight. It does not try to bundle a full catalog service, object store emulator, or managed-cloud authentication stack.
 
 ## Local Docker-style demo path
 
-For a local portfolio demo, the simplest coherent path is:
+For a local portfolio demo, there are now two coherent paths:
 
-1. Run the local fraud pipeline.
-2. Persist validated transactions and alerts to JSONL or Parquet.
-3. Use those files as the source for an external Iceberg ingestion step.
+1. Run the local fraud pipeline and write directly to a local SQL-backed Iceberg catalog.
+2. Or persist validated transactions and alerts to JSONL or Parquet first, then ingest them separately.
 
 If you want a fuller local Iceberg setup, the usual moving parts are:
 
@@ -101,14 +118,13 @@ Important considerations:
 
 Validation rules:
 
-- file sinks require an output path
+- JSONL and Parquet sinks require an output path
 - Iceberg sinks require catalog URI, warehouse, and table name
 - ordinary local usage still defaults to stdout alerts and no transaction sink
 
 ## Limitations
 
-- No bundled `pyiceberg` dependency
-- No catalog bootstrap automation
+- No bundled catalog service or object-store emulator
 - No authenticated object-store example in code
 - No PyFlink Iceberg sink implementation in the runtime wrapper yet
 

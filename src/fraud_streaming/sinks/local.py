@@ -164,9 +164,9 @@ def validate_local_sink_args(args: SupportsLocalSinkArgs) -> LocalSinkConfig:
     """Validate local sink CLI arguments before opening any files."""
     alert_output = args.alert_output
     transaction_output = args.transaction_output
-    if args.alert_sink != "stdout" and alert_output is None:
+    if args.alert_sink in {"jsonl", "parquet"} and alert_output is None:
         raise ValueError("--alert-output is required when --alert-sink is not stdout")
-    if args.transaction_sink != "none" and transaction_output is None:
+    if args.transaction_sink in {"jsonl", "parquet"} and transaction_output is None:
         raise ValueError("--transaction-output is required when --transaction-sink is not none")
 
     if alert_output is not None and alert_output.exists() and alert_output.is_dir():
