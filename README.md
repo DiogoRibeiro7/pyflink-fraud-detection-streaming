@@ -16,13 +16,53 @@ risk scoring and alert generation
 Kafka / stdout / downstream store
 ```
 
-## Highlights
+## Architecture
+
+```mermaid
+flowchart LR
+    A[Transactions\nJSONL / Kafka] --> B[PyFlink Wrapper]
+    A --> C[Local Runner]
+    B --> D[Keyed State\nuser_id:card_id]
+    C --> E[Pure Python Fraud Logic]
+    D --> E
+    E --> F[Rule Scoring]
+    E --> G[Optional ML Scoring]
+    F --> H[Alerts]
+    G --> H
+    H --> I[Stdout / Kafka / Local Sinks]
+    H --> J[Metrics / Drift / Feedback / Benchmarks]
+```
+
+Detailed notes live in [`docs/architecture.md`](docs/architecture.md).
+
+## What Works Now
 
 - Pure-Python fraud logic separated from Flink runtime wiring
 - Stateful per-user and per-card features for real-time scoring
 - Explainable alerts with human-readable fraud reasons
 - Local runner and tests that do not require Flink or Kafka
-- Clear extension path for Kafka, Iceberg, and ML scoring
+- Kafka producer/consumer CLIs and a Docker Compose streaming demo
+- Offline ML training, model blending, feature parity checks, replay, drift monitoring, and analyst feedback export
+- CI workflow, Docker publishing workflow, AWS templates, and Flink operations docs
+
+## Quick Evaluation
+
+If you want to evaluate the repository in under five minutes, start here:
+
+```bash
+poetry install --with dev
+make quality
+poetry run python -c "import sys; sys.path.insert(0, 'src'); from fraud_streaming.cli import main; raise SystemExit(main(['data/sample_transactions.jsonl', '--show-all']))"
+```
+
+Then inspect:
+
+- architecture walkthrough: [`docs/architecture.md`](docs/architecture.md)
+- 5-minute demo script: [`docs/demo-script.md`](docs/demo-script.md)
+- local runner sample: [`docs/samples/local_runner_output.jsonl`](docs/samples/local_runner_output.jsonl)
+- high-risk alert sample: [`docs/samples/high_risk_alert.json`](docs/samples/high_risk_alert.json)
+- metrics sample: [`docs/samples/metrics_example.prom`](docs/samples/metrics_example.prom)
+- drift sample: [`docs/samples/drift_report_example.md`](docs/samples/drift_report_example.md)
 
 ## Why this project is useful
 
@@ -53,12 +93,33 @@ Apache Flink is built for stateful computations over bounded and unbounded strea
 ├── tests/
 ├── data/
 │   └── sample_transactions.jsonl
+├── docs/
+│   ├── architecture.md
+│   ├── demo-script.md
+│   └── samples/
+├── infra/aws/
 ├── docker-compose.yml
 ├── Dockerfile
 └── ROADMAP.md
 ```
 
-## Quick start without Flink
+## Production Trade-Offs
+
+This repository is intentionally strong on:
+
+- stateful feature engineering
+- explainable fraud reasons
+- testability without heavy infrastructure
+- operational documentation and extension points
+
+It is intentionally cautious about:
+
+- pretending synthetic labels are real fraud ground truth
+- claiming the AWS templates are production-complete
+- claiming the Iceberg path is universally runnable without environment-specific work
+- overbuilding the PyFlink wrapper into a full deployment platform
+
+## Quick Start Without Flink
 
 This mode is useful for reviewing the project and testing the fraud logic.
 
@@ -106,14 +167,23 @@ poetry run pytest
 
 The default CI workflow intentionally avoids Kafka, Flink, Docker, and Iceberg extras so pull requests can be validated without external services.
 
-## Generate synthetic transactions
+## Optional Demos
+
+These are useful after the local path:
+
+- Kafka-first local demo with Redpanda and Flink: see the Docker Compose section below
+- ML training and model-aware scoring
+- replay, drift monitoring, analyst feedback export, and benchmarks
+- AWS deployment templates under [`infra/aws/`](infra/aws/README.md)
+
+## Generate Synthetic Transactions
 
 ```bash
 python scripts/generate_transactions.py --output data/generated_transactions.jsonl --users 20 --transactions 500 --seed 7
 python -m fraud_streaming.cli data/generated_transactions.jsonl --show-all
 ```
 
-## Produce transactions to Kafka
+## Produce Transactions To Kafka
 
 Install the optional Kafka extra:
 
@@ -145,7 +215,7 @@ poetry run fraud-produce-transactions \
 
 The producer validates each event with the same canonical transaction schema used by the local runner and the Flink wrapper.
 
-## Consume fraud alerts from Kafka
+## Consume Fraud Alerts From Kafka
 
 With the Kafka extra installed, you can inspect the alert stream produced by the Flink job:
 
@@ -169,7 +239,7 @@ poetry run fraud-consume-alerts \
   --min-risk-score 70
 ```
 
-## Run the PyFlink job locally
+## Run The PyFlink Job Locally
 
 Install the optional Flink dependency first:
 
@@ -201,7 +271,7 @@ The Kafka path assumes the required Flink Kafka connector is available to the Fl
 Connector setup notes and troubleshooting live in [`docs/flink-kafka-connectors.md`](docs/flink-kafka-connectors.md).
 Operational notes for checkpointing, savepoints, keyed state, and recovery live in [`docs/flink-operations.md`](docs/flink-operations.md).
 
-## Docker Compose streaming demo
+## Docker Compose Streaming Demo
 
 The repository includes a local streaming demo profile with:
 
@@ -249,7 +319,7 @@ Validation status:
 - `docker compose config` was used as the configuration-level validation target in the agent environment.
 - Full end-to-end execution with a real connector JAR still needs manual verification on a machine with Docker available.
 
-## Local Docker image
+## Local Docker Image
 
 Build the project image locally:
 
@@ -278,7 +348,7 @@ Publishing notes:
 - The default target registry is GitHub Container Registry, using `ghcr.io/<owner>/<repo>`.
 - Normal branch pushes do not publish Docker images.
 
-## AWS deployment templates
+## AWS Deployment Templates
 
 The repository now includes documentation-first AWS examples under [`infra/aws/`](infra/aws/README.md) for:
 
@@ -293,7 +363,16 @@ Important scope note:
 - all values under `infra/aws/env/*.example` are placeholders only
 - the Terraform files are a coherent skeleton for names, tags, VPC inputs, and storage identifiers, not a fully provisioned streaming stack
 
-## Example input event
+## Sample Outputs
+
+Checked-in examples from real runs in this repository:
+
+- local runner output: [`docs/samples/local_runner_output.jsonl`](docs/samples/local_runner_output.jsonl)
+- alert example: [`docs/samples/high_risk_alert.json`](docs/samples/high_risk_alert.json)
+- metrics example: [`docs/samples/metrics_example.prom`](docs/samples/metrics_example.prom)
+- drift example: [`docs/samples/drift_report_example.md`](docs/samples/drift_report_example.md)
+
+## Example Input Event
 
 ```json
 {
@@ -312,7 +391,7 @@ Important scope note:
 }
 ```
 
-## Example alert
+## Example Alert
 
 ```json
 {
@@ -330,7 +409,7 @@ Important scope note:
 }
 ```
 
-## Dead-letter handling for malformed events
+## Dead-Letter Handling For Malformed Events
 
 The local runner can keep processing valid events while writing malformed rows to a dead-letter JSONL file:
 
@@ -349,7 +428,7 @@ Dead-letter records preserve:
 
 Current quality checks cover missing required fields, invalid amounts, invalid timestamps, unsupported currencies, empty user/card identifiers, future event timestamps beyond tolerance, and duplicate transaction IDs within a local batch.
 
-## Local metrics export
+## Local Metrics Export
 
 The local runner can also write Prometheus text format metrics:
 
@@ -379,7 +458,7 @@ fraud_transactions_processed_total 8
 fraud_average_risk_score 18.125
 ```
 
-## Local file sinks and Iceberg-ready extension points
+## Local File Sinks And Iceberg-Ready Extension Points
 
 The local CLI still defaults to stdout alerts, but it can now also write validated transactions and emitted alerts to file sinks:
 
@@ -404,7 +483,7 @@ poetry run fraud-local data/sample_transactions.jsonl \
 
 The repository also includes an explicit Iceberg sink extension point with honest limitations documented in [`docs/iceberg-sink.md`](docs/iceberg-sink.md). The local fallback for runnable demos remains JSONL or Parquet.
 
-## Offline ML training baseline
+## Offline ML Training Baseline
 
 The repository now includes an optional offline training pipeline that reuses the same streaming-style feature logic used during local processing.
 
@@ -444,7 +523,7 @@ Important label note:
 - If no label is present, the pipeline creates synthetic demo labels from transparent heuristics so the ML workflow can be demonstrated.
 - Those synthetic labels are not real fraud ground truth and should not be presented as such.
 
-## Model scoring during inference
+## Model Scoring During Inference
 
 Rule-only scoring remains the default. To enable model-aware scoring after training a model artifact:
 
@@ -472,7 +551,7 @@ poetry run fraud-local data/sample_transactions.jsonl \
 
 Model artifacts fail fast if the stored raw feature schema does not match the canonical inference feature schema.
 
-## Feature parity checks
+## Feature Parity Checks
 
 To check offline-versus-inference feature parity on deterministic JSONL inputs:
 
@@ -495,7 +574,7 @@ The parity report checks:
 
 The command exits with a non-zero status when parity fails and always saves a JSON report.
 
-## Replay historical streams
+## Replay Historical Streams
 
 Replay historical JSONL transactions to stdout:
 
@@ -532,7 +611,7 @@ poetry run fraud-replay data/sample_transactions.jsonl --output-mode file --outp
 poetry run fraud-replay data/sample_transactions.jsonl --output-mode kafka --bootstrap-servers localhost:9092 --topic replay-transactions
 ```
 
-## Drift monitoring
+## Drift Monitoring
 
 Generate a drift report between a reference JSONL stream and a current JSONL stream:
 
@@ -558,7 +637,7 @@ Interpretation note:
 
 - These metrics are useful for portfolio-grade monitoring demonstrations, but small samples can make drift estimates noisy.
 
-## Analyst feedback ingestion
+## Analyst Feedback Ingestion
 
 Build an offline feedback report from alert JSONL output and analyst review JSONL records:
 
@@ -642,7 +721,7 @@ Important benchmark note:
 - `local_runner` measures the pure-Python fraud pipeline.
 - `kafka_producer_prepare` measures local message preparation and publish-loop overhead with an in-memory producer stub, not broker throughput.
 
-## Core features
+## Core Features
 
 For each user/card stream, the project computes:
 
@@ -657,6 +736,6 @@ For each user/card stream, the project computes:
 
 The default scoring is rule-based for transparency. This is intentional for a portfolio project: it shows the pipeline clearly before adding ML models.
 
-## Production extensions
+## Future Roadmap
 
-See [`ROADMAP.md`](ROADMAP.md) for the next stages: feature store integration, fuller Iceberg/S3 writes, drift monitoring, and CI/CD.
+Completed roadmap stages and stretch ideas live in [`ROADMAP.md`](ROADMAP.md).
