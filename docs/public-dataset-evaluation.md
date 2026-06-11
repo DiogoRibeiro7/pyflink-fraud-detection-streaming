@@ -23,6 +23,7 @@ For labelled datasets, pass:
 - `--dataset-name NAME`
 - optional provenance flags such as `--dataset-url`, `--dataset-license`, and `--provenance-notes`
 - `--require-input-labels` if the run must fail rather than fall back to synthetic demo labels
+- `--dataset-mapping PATH` if the source column names do not match the canonical transaction schema
 
 Each training run now saves `dataset_provenance.json` next to the model, schema, and metrics artifacts.
 
@@ -69,6 +70,58 @@ poetry run fraud-train-model \
   --provenance-notes "Manual local download; not committed to git." \
   --require-input-labels \
   --output-dir artifacts
+```
+
+## Example mapping file
+
+If the source dataset uses different column names, provide a mapping JSON file:
+
+```json
+{
+  "field_map": {
+    "transaction_id": "txn_id",
+    "user_id": "customer_id",
+    "card_id": "account_id",
+    "merchant_id": "merchant_code",
+    "amount": "amt",
+    "currency": "ccy",
+    "country": "country_code",
+    "device_id": "device_code",
+    "merchant_category": "mcc",
+    "event_time": "ts",
+    "channel": "entry_channel",
+    "is_card_present": "card_present",
+    "label": "fraud_flag"
+  },
+  "defaults": {
+    "latitude": null,
+    "longitude": null
+  },
+  "value_maps": {
+    "is_card_present": {
+      "Y": true,
+      "N": false
+    },
+    "label": {
+      "fraud": "1",
+      "legit": "0"
+    }
+  }
+}
+```
+
+Then run:
+
+```bash
+poetry run fraud-train-model \
+  --input data/public/labelled_transactions.csv \
+  --input-format csv \
+  --dataset-mapping data/public/labelled_transactions.mapping.json \
+  --dataset-name demo-public-labelled-set \
+  --dataset-url https://example.com/dataset-card-fraud \
+  --dataset-license "See upstream dataset terms" \
+  --provenance-notes "Manual local download; not redistributed in this repository." \
+  --require-input-labels
 ```
 
 ## Interpretation notes

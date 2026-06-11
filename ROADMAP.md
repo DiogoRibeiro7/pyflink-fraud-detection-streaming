@@ -52,7 +52,7 @@
 
 ## Stage 7 — Stretch ideas
 
-- [ ] Evaluate on a public or organization-provided labelled fraud dataset with clear provenance notes.
+- [x] Evaluate on a public or organization-provided labelled fraud dataset with clear provenance notes.
 - [x] Add event-time watermarks and explicit late-event behaviour in the PyFlink wrapper.
 - [x] Add state compatibility fixtures for upgrade testing across saved `UserProfileState` payload versions.
 - [x] Add a lightweight analyst review UI on top of the feedback ingestion flow.

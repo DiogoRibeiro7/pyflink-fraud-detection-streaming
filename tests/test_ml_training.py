@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 from fraud_streaming.ml.training import (
@@ -163,3 +164,88 @@ def test_build_training_dataset_requires_requested_label_column() -> None:
         assert "fraud_flag" in str(exc)
     else:
         raise AssertionError("expected missing label column validation to fail")
+
+
+def test_iter_training_payloads_applies_dataset_mapping(tmp_path: Path) -> None:
+    csv_path = tmp_path / "public_like.csv"
+    mapping_path = tmp_path / "mapping.json"
+    mapping_path.write_text(
+        json.dumps(
+            {
+                "field_map": {
+                    "transaction_id": "txn_id",
+                    "user_id": "customer_id",
+                    "card_id": "account_id",
+                    "merchant_id": "merchant_code",
+                    "amount": "amt",
+                    "currency": "ccy",
+                    "country": "country_code",
+                    "device_id": "device_code",
+                    "merchant_category": "mcc",
+                    "event_time": "ts",
+                    "channel": "entry_channel",
+                    "is_card_present": "card_present",
+                    "label": "fraud_flag",
+                },
+                "defaults": {"latitude": None, "longitude": None},
+                "value_maps": {
+                    "is_card_present": {"Y": True, "N": False},
+                    "label": {"fraud": "1", "legit": "0"},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    with csv_path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(
+            handle,
+            fieldnames=[
+                "txn_id",
+                "customer_id",
+                "account_id",
+                "merchant_code",
+                "amt",
+                "ccy",
+                "country_code",
+                "device_code",
+                "mcc",
+                "ts",
+                "entry_channel",
+                "card_present",
+                "fraud_flag",
+            ],
+        )
+        writer.writeheader()
+        writer.writerow(
+            {
+                "txn_id": "tx-9",
+                "customer_id": "user-9",
+                "account_id": "card-9",
+                "merchant_code": "merchant-9",
+                "amt": "88.5",
+                "ccy": "eur",
+                "country_code": "pt",
+                "device_code": "device-9",
+                "mcc": "travel",
+                "ts": "2026-06-10T12:00:00Z",
+                "entry_channel": "online",
+                "card_present": "N",
+                "fraud_flag": "fraud",
+            }
+        )
+
+    payloads = list(
+        iter_training_payloads(
+            input_path=csv_path,
+            input_format="csv",
+            dataset_mapping_path=mapping_path,
+            users=0,
+            transactions=0,
+            seed=0,
+        )
+    )
+    dataset = build_training_dataset(payloads, require_input_labels=True)
+
+    assert payloads[0]["transaction_id"] == "tx-9"
+    assert payloads[0]["is_card_present"] is False
+    assert dataset.examples[0].label == 1

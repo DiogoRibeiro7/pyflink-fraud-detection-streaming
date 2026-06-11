@@ -561,6 +561,8 @@ poetry run fraud-train-model \
 
 More guidance lives in [`docs/public-dataset-evaluation.md`](docs/public-dataset-evaluation.md).
 
+If the labelled dataset uses different column names from the repo’s canonical transaction schema, provide a JSON mapping file with `--dataset-mapping`.
+
 ## Model Scoring During Inference
 
 Rule-only scoring remains the default. To enable model-aware scoring after training a model artifact:

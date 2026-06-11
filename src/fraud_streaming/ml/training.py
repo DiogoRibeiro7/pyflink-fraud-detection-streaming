@@ -14,6 +14,7 @@ from typing import Any, Protocol
 
 from fraud_streaming.config import DEFAULT_CONFIG, FraudConfig
 from fraud_streaming.features import compute_features, update_state
+from fraud_streaming.ml.dataset_mapping import apply_dataset_mapping, load_dataset_mapping
 from fraud_streaming.rules import score_features
 from fraud_streaming.schemas import FraudFeatures, Transaction, UserProfileState
 from fraud_streaming.serialization import transaction_from_dict
@@ -186,6 +187,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Fail if the input dataset does not include the requested label column.",
     )
     parser.add_argument(
+        "--dataset-mapping",
+        type=Path,
+        help="Optional JSON mapping file for adapting external labelled datasets.",
+    )
+    parser.add_argument(
         "--output-dir",
         type=Path,
         default=Path("artifacts"),
@@ -219,6 +225,8 @@ def validate_args(args: argparse.Namespace) -> None:
         raise ValueError("--label-column must not be empty")
     if not args.dataset_name.strip():
         raise ValueError("--dataset-name must not be empty")
+    if args.dataset_mapping is not None and not args.dataset_mapping.exists():
+        raise ValueError(f"dataset mapping file does not exist: {args.dataset_mapping}")
 
 
 def detect_input_format(input_path: Path | None, requested_format: str) -> str:
@@ -291,11 +299,13 @@ def iter_training_payloads(
     *,
     input_path: Path | None,
     input_format: str,
+    dataset_mapping_path: Path | None = None,
     users: int,
     transactions: int,
     seed: int,
 ) -> Iterable[dict[str, Any]]:
     """Yield raw payloads from JSONL input or synthetic generation."""
+    dataset_mapping = load_dataset_mapping(dataset_mapping_path)
     if input_path is not None:
         if input_format == "csv":
             with input_path.open("r", encoding="utf-8", newline="") as handle:
@@ -310,7 +320,7 @@ def iter_training_payloads(
                     }
                     if not payload:
                         continue
-                    yield payload
+                    yield apply_dataset_mapping(payload, dataset_mapping)
             return
         with input_path.open("r", encoding="utf-8") as handle:
             for line_number, raw_line in enumerate(handle, start=1):
@@ -322,7 +332,7 @@ def iter_training_payloads(
                     raise ValueError(
                         f"training JSON must decode to an object at line {line_number}"
                     )
-                yield payload
+                yield apply_dataset_mapping(payload, dataset_mapping)
         return
 
     for payload in generate_transactions(users=users, transactions=transactions, seed=seed):
@@ -550,6 +560,7 @@ def train_model(args: argparse.Namespace) -> TrainingArtifacts:
     payloads = iter_training_payloads(
         input_path=args.input,
         input_format=input_format,
+        dataset_mapping_path=args.dataset_mapping,
         users=args.users,
         transactions=args.transactions,
         seed=args.seed,

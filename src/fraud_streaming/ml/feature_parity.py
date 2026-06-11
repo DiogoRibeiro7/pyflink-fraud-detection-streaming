@@ -82,6 +82,7 @@ def build_feature_rows_from_jsonl(input_path: Path) -> list[TrainingExample]:
     payloads = iter_training_payloads(
         input_path=input_path,
         input_format="jsonl",
+        dataset_mapping_path=None,
         users=0,
         transactions=0,
         seed=0,
