@@ -89,6 +89,21 @@ make local-demo
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the local development workflow and optional extras.
 See [`docs/iceberg-sink.md`](docs/iceberg-sink.md) for the local sink abstraction and Iceberg design notes.
+<!-- CI badge placeholder: add the repository-specific GitHub Actions badge URL once the default remote is finalized. -->
+
+## CI parity
+
+GitHub Actions CI runs the same default quality gates used locally on Python `3.10`, `3.11`, and `3.12`:
+
+```bash
+poetry install --with dev
+poetry run ruff format --check src tests scripts
+poetry run ruff check src tests scripts
+poetry run mypy src
+poetry run pytest
+```
+
+The default CI workflow intentionally avoids Kafka, Flink, Docker, and Iceberg extras so pull requests can be validated without external services.
 
 ## Generate synthetic transactions
 
