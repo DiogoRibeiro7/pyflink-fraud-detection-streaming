@@ -1,0 +1,14 @@
+aws_region             = "eu-west-1"
+project_name           = "pyflink-fraud-detection-streaming"
+environment            = "dev"
+vpc_id                 = "vpc-aaaaaaaa"
+private_subnet_ids     = ["subnet-aaaaaaaa", "subnet-bbbbbbbb"]
+security_group_ids     = ["sg-aaaaaaaa"]
+raw_transactions_bucket = "replace-me-raw-transactions"
+alerts_bucket          = "replace-me-fraud-alerts"
+glue_database_name     = "fraud_streaming"
+transactions_topic_name = "transactions"
+alerts_topic_name      = "fraud-alerts"
+extra_tags = {
+  Owner = "replace-me"
+}

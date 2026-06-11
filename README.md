@@ -89,6 +89,7 @@ make local-demo
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the local development workflow and optional extras.
 See [`docs/iceberg-sink.md`](docs/iceberg-sink.md) for the local sink abstraction and Iceberg design notes.
+See [`infra/aws/README.md`](infra/aws/README.md) for AWS deployment templates and security notes.
 <!-- CI badge placeholder: add the repository-specific GitHub Actions badge URL once the default remote is finalized. -->
 
 ## CI parity
@@ -275,6 +276,21 @@ Publishing notes:
 - GitHub Actions publishes the image only for tags matching `v*.*.*` and manual workflow dispatch.
 - The default target registry is GitHub Container Registry, using `ghcr.io/<owner>/<repo>`.
 - Normal branch pushes do not publish Docker images.
+
+## AWS deployment templates
+
+The repository now includes documentation-first AWS examples under [`infra/aws/`](infra/aws/README.md) for:
+
+- Amazon MSK as the Kafka-compatible transport
+- Amazon Kinesis Data Streams as an AWS-native stream transport
+- Amazon Managed Service for Apache Flink deployment considerations
+- Amazon S3 plus AWS Glue Catalog for Iceberg-oriented analytical storage
+
+Important scope note:
+
+- these are portfolio-grade templates and placeholders, not one-click production deployments
+- all values under `infra/aws/env/*.example` are placeholders only
+- the Terraform files are a coherent skeleton for names, tags, VPC inputs, and storage identifiers, not a fully provisioned streaming stack
 
 ## Example input event
 
