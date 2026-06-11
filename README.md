@@ -536,6 +536,51 @@ poetry run fraud-feedback-report \
 
 The retraining export joins canonical transaction-derived features, alert scores, analyst labels, and review metadata. `needs_review` items are preserved in the export with a null binary label instead of being silently coerced.
 
+## Benchmarks
+
+Benchmark scripts live under [`benchmarks/`](benchmarks/). They are intentionally separate from unit tests and CI smoke checks.
+
+Run the default local benchmark matrix:
+
+```bash
+make benchmark
+```
+
+Or call the script directly with custom scenario sizes:
+
+```bash
+poetry run python benchmarks/benchmark_local_runner.py \
+  --users 10 \
+  --users 100 \
+  --transactions 1000 \
+  --transactions 5000 \
+  --repeats 3 \
+  --output artifacts/benchmarks/local_runner_benchmark.json \
+  --markdown-output artifacts/benchmarks/local_runner_benchmark.md
+```
+
+The benchmark report includes:
+
+- events processed per second
+- emitted alert count
+- average, fastest, and slowest runtime
+- peak memory from `tracemalloc`, unless disabled
+
+An optional Kafka producer preparation benchmark is also available when the Kafka extra is installed:
+
+```bash
+poetry install --with dev -E kafka
+poetry run python benchmarks/benchmark_local_runner.py \
+  --users 20 \
+  --transactions 2000 \
+  --include-kafka-producer
+```
+
+Important benchmark note:
+
+- `local_runner` measures the pure-Python fraud pipeline.
+- `kafka_producer_prepare` measures local message preparation and publish-loop overhead with an in-memory producer stub, not broker throughput.
+
 ## Core features
 
 For each user/card stream, the project computes:
